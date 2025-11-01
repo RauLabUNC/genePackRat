@@ -1,5 +1,10 @@
+# Declare global variables for data.table NSE
+utils::globalVariables(c(".", ":=", ".N", "chr", "pos", "p_value",
+                         "variant_type", "n_variants", "human_gene_id",
+                         "biotype", "locus_id", "n_genes"))
+
 #' Join gene tables with optional annotations
-#' 
+#'
 #' @description
 #' Core function for joining gene tables with various annotation sources.
 #' Follows relational database principles to combine gene-level data from
@@ -29,7 +34,7 @@
 #' result <- build_gene_table(genes, expression_df = expr)
 #' 
 #' @export
-#' @importFrom data.table data.table setDT merge.data.table
+#' @importFrom data.table data.table setDT merge.data.table := .N copy
 #' @importFrom dplyr left_join inner_join full_join
 
 build_gene_table <- function(genes_df,
@@ -137,8 +142,9 @@ build_gene_table <- function(genes_df,
 #' @param gene_end_col Column name for gene end position
 #' 
 #' @return Data table with genes assigned to loci
-#' 
+#'
 #' @export
+#' @importFrom data.table data.table setDT := .N
 aggregate_genes_by_locus <- function(genes_dt,
                                     locus_ranges,
                                     gene_chr_col = "chromosome",
@@ -204,8 +210,9 @@ aggregate_genes_by_locus <- function(genes_dt,
 #' @param require_variants Require coding variants (default: FALSE)
 #' 
 #' @return Filtered gene data table
-#' 
+#'
 #' @export
+#' @importFrom data.table copy
 filter_genes <- function(genes_dt,
                         require_human_ortholog = FALSE,
                         require_protein_coding = FALSE,

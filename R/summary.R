@@ -360,8 +360,9 @@ identify_top_candidates <- function(gene_data, n = 10) {
 #' 
 #' @param gene_data Gene data frame
 #' @return Named list of gene categories
-#' 
+#'
 #' @keywords internal
+#' @importFrom stats quantile
 categorize_genes <- function(gene_data) {
   
   categories <- list()
