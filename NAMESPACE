@@ -13,21 +13,8 @@ export(generateGeneInfoExcel_legacy)
 export(generateLocusPacket_legacy)
 
 # Existing functions that are still relevant
-export(aggregate_genes_by_locus)
-export(build_gene_table)
-export(create_gene_workbook)
-export(extract_phenotypes)
 export(filterGenes)
-export(filter_genes)
-export(filter_genes_flexible)
-export(filter_genes_preset)
-export(generate_locus_report)
 export(makeFilter)
-export(make_filter)
-export(plot_locus)
-export(plot_locus_dashboard)
-export(score_phenotype_relevance)
-export(summarize_phenotypes_by_gene)
 
 # Import statements for dependencies
 importFrom(data.table,":=")
