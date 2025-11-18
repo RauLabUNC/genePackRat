@@ -1,0 +1,93 @@
+==========================================
+Job ID: 22265246
+Job Name: fetch_mm39_coords
+Node: c0522
+Start Time: Tue Nov 18 02:40:36 PM EST 2025
+Working Directory: /proj/raulab/users/brian/packrat
+==========================================
+
+R version:
+R version 4.4.0 (2024-04-24) -- "Puppy Cup"
+
+Checking/Installing biomaRt package...
+biomaRt version: 2.62.1 
+data.table version: 1.17.8 
+
+==========================================
+Fetching mouse mm39 gene coordinates...
+==========================================
+
+========================================
+Fetching gene coordinates from Ensembl
+========================================
+Species: Mus musculus 
+Genome assembly: mm39 ( GRCm39 )
+Dataset: mmusculus_gene_ensembl 
+Host: https://www.ensembl.org 
+========================================
+
+Connecting to Ensembl Biomart...
+Connection established!
+
+Querying Biomart for gene coordinates...
+This may take several minutes...
+
+Query completed in 6.13 seconds
+Retrieved 78334 gene entries
+
+Filtering for standard chromosomes...
+Genes on standard chromosomes: 78275 
+
+Filtering by gene biotype...
+Genes after biotype filtering: 60582 
+Biotypes included: protein_coding, lncRNA, rRNA, miRNA, snRNA, snoRNA, IG_V_gene, IG_J_gene, IG_C_gene, IG_D_gene, TR_V_gene, TR_D_gene, TR_J_gene, TR_C_gene 
+
+Removing entries without gene symbols...
+Genes with valid symbols: 59975 
+
+Removing duplicate entries...
+Duplicates removed: 0 
+Final gene count: 59975 
+
+Saving results to: /proj/raulab/users/brian/packrat/scripts/biomart/mouse_coords_mm39.csv 
+
+========================================
+Summary Statistics
+========================================
+Total genes: 59975 
+Unique chromosomes: 22 
+Chromosomes: 1, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 2, 3, 4, 5, 6, 7, 8, 9, MT, X, Y 
+Genes on plus strand: 30072 
+Genes on minus strand: 29903 
+
+First 5 entries:
+   gene_symbol         ensembl_id    chr   start     end strand
+        <char>             <char> <char>   <int>   <int> <char>
+1:     Gm26206 ENSMUSG00000064842      1 3172239 3172348      +
+2:        Xkr4 ENSMUSG00000051951      1 3276124 3741721      -
+3:      Gm1992 ENSMUSG00000089699      1 3536794 3583776      +
+4:     Gm19938 ENSMUSG00000102331      1 3717532 3729127      -
+5:     Gm27396 ENSMUSG00000088333      1 3854099 3854156      -
+
+========================================
+Gene coordinate file created successfully!
+Output: /proj/raulab/users/brian/packrat/scripts/biomart/mouse_coords_mm39.csv 
+========================================
+
+
+Successfully generated mouse_coords_mm39.csv
+Moved file to: /proj/raulab/users/brian/packrat/inst/extdata/mouse_coords_mm39.csv
+
+File statistics:
+59976 /proj/raulab/users/brian/packrat/inst/extdata/mouse_coords_mm39.csv
+
+First 5 lines:
+gene_symbol,ensembl_id,chr,start,end,strand
+Gm26206,ENSMUSG00000064842,1,3172239,3172348,+
+Xkr4,ENSMUSG00000051951,1,3276124,3741721,-
+Gm1992,ENSMUSG00000089699,1,3536794,3583776,+
+Gm19938,ENSMUSG00000102331,1,3717532,3729127,-
+
+==========================================
+Job completed at: Tue Nov 18 02:40:54 PM EST 2025
+==========================================

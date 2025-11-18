@@ -1,0 +1,37 @@
+==========================================
+Job ID: 22265247
+Job Name: fetch_hg38_coords
+Node: c1122
+Start Time: Tue Nov 18 02:40:36 PM EST 2025
+Working Directory: /proj/raulab/users/brian/packrat
+==========================================
+
+R version:
+R version 4.4.0 (2024-04-24) -- "Puppy Cup"
+
+Checking/Installing biomaRt package...
+biomaRt version: 2.62.1 
+data.table version: 1.17.8 
+
+==========================================
+Fetching human hg38 gene coordinates...
+==========================================
+
+========================================
+Fetching gene coordinates from Ensembl
+========================================
+Species: Homo sapiens 
+Genome assembly: hg38 ( GRCh38 )
+Dataset: hsapiens_gene_ensembl 
+Host: https://www.ensembl.org 
+========================================
+
+Connecting to Ensembl Biomart...
+Connection established!
+
+Querying Biomart for gene coordinates...
+This may take several minutes...
+
+Error querying Biomart:
+all(id %in% .get_all_rids(bfc)) is not TRUE 
+ERROR: R script failed!
