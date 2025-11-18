@@ -4,7 +4,7 @@
 export(initPackRat)
 export(addRatTable)
 export(listPackRatTables)
-export(generateGeneSheet)
+export(makeGeneSheet)
 export(generateLocusZoomPlot_v2)
 
 # Legacy wrapper functions (deprecated)

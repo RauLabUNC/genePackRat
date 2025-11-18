@@ -1,5 +1,5 @@
-\name{generateGeneSheet}
-\alias{generateGeneSheet}
+\name{makeGeneSheet}
+\alias{makeGeneSheet}
 \title{Generate Excel or CSV Output from locusPackRat Project}
 \description{
   Creates formatted Excel workbooks or CSV files from a locusPackRat project,
@@ -7,7 +7,7 @@
   and multi-tab Excel outputs with custom formatting.
 }
 \usage{
-generateGeneSheet(format = c("excel", "csv"), output_file = NULL,
+makeGeneSheet(format = c("excel", "csv"), output_file = NULL,
                   filter_expr = NULL, highlight_genes = NULL,
                   include_supplementary = TRUE, split_by = NULL,
                   split_criteria = NULL, project_dir = ".",
@@ -43,19 +43,19 @@ generateGeneSheet(format = c("excel", "csv"), output_file = NULL,
 }
 \examples{
 # Generate simple CSV output
-generateGeneSheet(format = "csv", project_dir = "my_project")
+makeGeneSheet(format = "csv", project_dir = "my_project")
 
 # Generate Excel with all supplementary tables
-generateGeneSheet(format = "excel", include_supplementary = TRUE,
-                  project_dir = "my_project")
+makeGeneSheet(format = "excel", include_supplementary = TRUE,
+              project_dir = "my_project")
 
 # Generate Excel with specific tables only
-generateGeneSheet(format = "excel",
-                  include_supplementary = c("expression", "phenotypes"),
+makeGeneSheet(format = "excel",
+              include_supplementary = c("expression", "phenotypes"),
                   project_dir = "my_project")
 
 # Generate multi-tab Excel with filtering
-generateGeneSheet(
+makeGeneSheet(
   format = "excel",
   split_by = "criteria",
   split_criteria = list(

@@ -362,7 +362,7 @@ listPackRatTables <- function(project_dir = ".") {
 #' @importFrom openxlsx createWorkbook addWorksheet writeDataTable createStyle addStyle setColWidths freezePane saveWorkbook
 #'
 #' @export
-generateGeneSheet <- function(filter_expr = NULL,
+makeGeneSheet <- function(filter_expr = NULL,
                             highlight_genes = NULL,
                             highlight_expr = NULL,
                             highlight_color = "#FFFF99",

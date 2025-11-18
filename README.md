@@ -1,44 +1,34 @@
 # locusPackRat
 
-A flexible R package for managing genomic analysis projects with persistent data storage and integrated visualization.
-
-## Overview
-
-locusPackRat provides a project-based workflow for genomic analyses. Instead of passing data between functions, you create a persistent project that stores your genes or genomic regions along with any supplementary data. This allows for:
-
-- **Persistent storage**: Load data once, use many times
-- **Flexible integration**: Add any type of supplementary data
-- **Reproducible outputs**: Regenerate visualizations and reports with different parameters
-- **Multi-species support**: Works with human and mouse genomes (hg38, hg19, mm39, mm10)
+A project-based R package for genomic analysis with persistent data storage and Excel output generation.
 
 ## Installation
 
-```r
-# Install from GitHub
-devtools::install_github("RauLabUNC/locusPackRat")
+Install directly from GitHub using `devtools`:
 
-# For visualization features, you'll also need plotgardener from Bioconductor:
-BiocManager::install("plotgardener")
+```r
+# Install devtools if you haven't already
+install.packages("devtools")
+
+# Install locusPackRat
+devtools::install_github("RauLabUNC/locusPackRat")
 ```
 
-### Dependencies
-- R >= 4.3.0
-- data.table
-- jsonlite
-- openxlsx (for Excel output)
-- plotgardener (optional, for LocusZoom plots)
+## Core Functions
 
-## Quick Start
+The package provides three main functions for genomic data analysis:
 
-### 1. Initialize a Project
+### 1. `initPackRat()` - Initialize a Project
+
+Create a new analysis project with your gene list or genomic regions:
 
 ```r
 library(locusPackRat)
 
-# With gene list
+# Initialize with a gene list
 genes <- data.frame(
-  gene_symbol = c("BRCA1", "TP53", "EGFR", "MYC"),
-  expression = c(100, 250, 50, 300)
+  gene_symbol = c("BRCA1", "TP53", "MYC", "EGFR"),
+  expression = c(100, 250, 75, 180)
 )
 
 initPackRat(
@@ -46,15 +36,164 @@ initPackRat(
   mode = "gene",
   species = "human",
   genome = "hg38",
-  project_dir = "my_project"
+  project_dir = "my_analysis"
+)
+```
+
+The function automatically:
+- Creates a `.locusPackRat` directory structure
+- Enriches genes with genomic coordinates from built-in databases (~60,000 mouse genes, ~30,000 human genes)
+- Generates orthology mappings between species
+- Saves project configuration
+
+### 2. `addRatTable()` - Add Supplementary Data
+
+Link any additional data to your genes or regions:
+
+```r
+# Add pathway annotations
+pathways <- data.frame(
+  gene_symbol = c("BRCA1", "TP53"),
+  pathway = c("DNA repair", "Cell cycle"),
+  p_value = c(0.001, 0.0001)
 )
 
-# Or with genomic regions (e.g., QTL results)
+addRatTable(
+  data = pathways,
+  table_name = "pathway_analysis",
+  link_type = "gene",
+  link_by = "gene_symbol",
+  project_dir = "my_analysis"
+)
+```
+
+You can add multiple supplementary tables:
+- Expression data
+- Phenotype associations
+- Clinical information
+- QTL statistics
+- Any custom data with gene or region identifiers
+
+### 3. `makeGeneSheet()` - Generate Excel Output
+
+Create professional Excel workbooks with all your integrated data:
+
+```r
+# Generate Excel with all data
+makeGeneSheet(
+  format = "excel",
+  output_file = "results.xlsx",
+  include_supplementary = TRUE,
+  project_dir = "my_analysis"
+)
+
+# Generate multi-tab Excel with custom filtering
+makeGeneSheet(
+  format = "excel",
+  output_file = "filtered_results.xlsx",
+  split_by = "criteria",
+  split_criteria = list(
+    "High_Expression" = "expression > 100",
+    "Low_Expression" = "expression <= 100",
+    "Significant" = "p_value < 0.05"
+  ),
+  highlight_genes = c("BRCA1", "TP53"),
+  project_dir = "my_analysis"
+)
+```
+
+Output features:
+- Auto-sized columns with frozen headers
+- Gene highlighting (yellow background)
+- Multiple tabs based on filtering criteria
+- All supplementary data integrated
+- Professional formatting ready for publication
+
+## Quick Start Example
+
+```r
+library(locusPackRat)
+library(data.table)
+
+# 1. Create project with your genes
+my_genes <- data.table(
+  gene_symbol = c("Myc", "Tp53", "Egfr", "Vegfa", "Il6"),
+  fold_change = c(2.5, -1.8, 3.2, 1.5, -2.1),
+  p_value = c(0.001, 0.01, 0.0001, 0.05, 0.005)
+)
+
+initPackRat(
+  data = my_genes,
+  mode = "gene",
+  species = "mouse",
+  genome = "mm39"
+)
+
+# 2. Add supplementary data
+tissue_exp <- data.table(
+  gene_symbol = c("Myc", "Tp53", "Egfr"),
+  brain = c(100, 50, 75),
+  liver = c(20, 150, 30)
+)
+
+addRatTable(
+  data = tissue_exp,
+  table_name = "tissue_expression",
+  link_type = "gene",
+  link_by = "gene_symbol"
+)
+
+# 3. Generate Excel output
+makeGeneSheet(
+  format = "excel",
+  output_file = "analysis_results.xlsx",
+  include_supplementary = TRUE,
+  highlight_genes = c("Myc", "Tp53")
+)
+```
+
+## Features
+
+- **Persistent Storage**: Load data once, use multiple times
+- **Built-in Annotations**: Complete genome coordinates for human (hg38) and mouse (mm39)
+- **Cross-species Support**: Automatic orthology mapping
+- **Flexible Data Integration**: Link any supplementary data by gene symbol or coordinates
+- **Professional Excel Output**: Multi-sheet workbooks with formatting and highlighting
+
+## Project Structure
+
+Each project creates a `.locusPackRat` directory:
+
+```
+my_analysis/
+└── .locusPackRat/
+    ├── input/
+    │   ├── genes.csv         # Your input genes with coordinates
+    │   └── orthology.csv      # Cross-species mappings
+    ├── supplementary/
+    │   ├── pathway_analysis.csv
+    │   └── tissue_expression.csv
+    ├── output/
+    │   └── results.xlsx
+    └── config.json            # Project metadata
+```
+
+## Additional Functions
+
+- `listPackRatTables()` - List all supplementary tables in a project
+- `generateLocusZoomPlot_v2()` - Create LocusZoom-style visualizations (requires plotgardener)
+
+## Working with Genomic Regions
+
+The package also supports region-based analysis (e.g., QTL intervals, ATAC-seq peaks):
+
+```r
+# Initialize with genomic regions
 regions <- data.frame(
   chr = c(5, 10, 12),
   start = c(10000000, 50000000, 75000000),
   end = c(15000000, 55000000, 80000000),
-  trait = c("height", "weight", "BMI")
+  lod_score = c(8.5, 6.2, 7.8)
 )
 
 initPackRat(
@@ -62,164 +201,26 @@ initPackRat(
   mode = "region",
   species = "mouse",
   genome = "mm39",
-  project_dir = "qtl_project"
+  project_dir = "qtl_analysis"
 )
 ```
 
-### 2. Add Supplementary Data
+## Supported Genomes
 
-```r
-# Add expression data
-expression_data <- read.csv("expression.csv")
-addRatTable(
-  data = expression_data,
-  table_name = "expression",
-  link_type = "gene",
-  link_by = "gene_symbol",  # Auto-detected if NULL
-  project_dir = "my_project"
-)
+- Human: hg38 (~30,000 genes)
+- Mouse: mm39 (~60,000 genes)
 
-# Add QTL scan results
-scan_results <- read.csv("qtl_scans.csv")
-addRatTable(
-  data = scan_results,
-  table_name = "qtl_scans",
-  link_type = "region",
-  project_dir = "qtl_project"
-)
+## Dependencies
 
-# View available tables
-listPackRatTables("my_project")
-```
-
-### 3. Generate Outputs
-
-```r
-# Create Excel report with all data
-generateGeneSheet(
-  format = "excel",
-  include_supplementary = TRUE,  # Include all tables
-  output_file = "results/gene_report.xlsx",
-  project_dir = "my_project"
-)
-
-# Create filtered CSV
-generateGeneSheet(
-  format = "csv",
-  filter_expr = "expression > 100",
-  include_supplementary = c("expression", "phenotypes"),  # Specific tables
-  output_file = "results/high_expression.csv",
-  project_dir = "my_project"
-)
-
-# Generate LocusZoom plot (requires plotgardener)
-generateLocusZoomPlot_v2(
-  region_id = "region_1",
-  scan_table = "qtl_scans",
-  project_dir = "qtl_project"
-)
-```
-
-## Key Functions
-
-### Project Management
-- `initPackRat()` - Initialize a new project with genes or regions
-- `addRatTable()` - Add supplementary data tables
-- `listPackRatTables()` - List available supplementary tables
-
-### Output Generation
-- `generateGeneSheet()` - Create formatted Excel or CSV outputs
-- `generateLocusZoomPlot_v2()` - Create LocusZoom-style visualization
-
-## Project Structure
-
-Projects are stored in a `.locusPackRat` directory:
-
-```
-my_project/
-└── .locusPackRat/
-    ├── input/
-    │   ├── genes.csv         # Core gene/region data
-    │   └── orthology.csv      # Cross-species orthologs
-    ├── supplementary/
-    │   ├── expression.csv     # Added via addRatTable()
-    │   ├── phenotypes.csv
-    │   └── qtl_scans.csv
-    ├── output/
-    │   ├── gene_sheet.xlsx
-    │   └── plots/
-    └── config.json            # Project metadata
-```
-
-## Advanced Features
-
-### Excel with Multiple Tabs
-
-```r
-generateGeneSheet(
-  format = "excel",
-  split_by = "criteria",
-  split_criteria = list(
-    "High_Expression" = "expression > 100",
-    "Disease_Associated" = "!is.na(disease)",
-    "Significant" = "p_value < 0.05"
-  ),
-  highlight_genes = c("BRCA1", "TP53"),
-  project_dir = "my_project"
-)
-```
-
-### Batch Processing
-
-```r
-# Generate plots for all regions
-regions <- fread("qtl_project/.locusPackRat/input/regions.csv")
-for (region in regions$region_id) {
-  generateLocusZoomPlot_v2(
-    region_id = region,
-    project_dir = "qtl_project"
-  )
-}
-```
-
-## Working with QTL Data
-
-```r
-# Initialize with QTL regions
-qtl_results <- data.frame(
-  chr = c(5, 10),
-  start = c(10000000, 50000000),
-  end = c(15000000, 55000000),
-  peak_pos = c(12500000, 52500000),
-  lod = c(8.5, 6.2),
-  trait = c("heart_rate", "blood_pressure")
-)
-
-initPackRat(qtl_results, mode = "region",
-           species = "mouse", genome = "mm39",
-           project_dir = "heart_qtl")
-
-# Add scan data
-addRatTable(scan_data, "scans", "region", project_dir = "heart_qtl")
-
-# Add gene priorities
-addRatTable(gene_scores, "priorities", "gene", project_dir = "heart_qtl")
-
-# Generate comprehensive report
-generateGeneSheet(
-  format = "excel",
-  include_supplementary = TRUE,
-  project_dir = "heart_qtl"
-)
-```
-
-## Migration from Legacy Functions
-
-If you're using the old packet_core workflow, temporary wrappers are available:
-- `generateLocusZoomPlot_legacy()` - Wraps old generateLocusZoomPlot
-- `generateGeneInfoExcel_legacy()` - Wraps old generateGeneInfoExcel
-
-See the [package documentation](https://github.com/RauLabUNC/locusPackRat) for detailed migration examples.
+The package requires:
+- R (>= 4.3.0)
+- data.table
+- jsonlite
+- openxlsx
+- dplyr
+- tidyr
+- plotgardener (optional, for visualization)
+- RColorBrewer
 
 ## Citation
 
