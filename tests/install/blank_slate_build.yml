@@ -1,0 +1,20 @@
+name: packrat_build_test
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - r-base>=4.3.0
+  - r-remotes        
+  - r-xml 
+  - r-rcurl
+  - make
+  - c-compiler       # installs gcc/clang
+  - cxx-compiler     # installs g++
+  - binutils
+  - pkg-config       # Helps R find system libraries
+  - libxml2          # specific headers for compiling XML packages
+  - libcurl          # network headers
+  - openssl          # crypto headers
+  - zlib
+  - bzip2
+  - xz

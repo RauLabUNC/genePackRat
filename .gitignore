@@ -6,6 +6,7 @@
 .RData
 .Rproj.user/
 *.Rproj
+temp_lib/
 
 # Package build artifacts
 *.tar.gz

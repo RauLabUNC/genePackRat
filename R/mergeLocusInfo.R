@@ -15,7 +15,8 @@
 #'       in tests/test_data/ (or inst/extdata/ when installed as a package).
 #'       Currently supports mm39 (mouse) and hg38 (human) genomes.
 #'
-#' @importFrom data.table fread fwrite setDT := copy rbind
+#' @importFrom data.table fread fwrite setDT := copy 
+#' @importFrom dplyr bind_rows
 #' @importFrom jsonlite write_json read_json
 #'
 #' @export
@@ -247,7 +248,8 @@ addRatTable <- function(data,
 #'
 #' @return data.table with table information (name, link_type, link_by, n_rows, n_cols)
 #'
-#' @importFrom data.table data.table fread rbind
+#' @importFrom data.table data.table fread
+#' @importFrom dplyr bind_rows
 #' @importFrom jsonlite read_json
 #'
 #' @export
@@ -323,7 +325,7 @@ listPackRatTables <- function(project_dir = ".") {
       })
     }
 
-    table_info <- rbind(table_info, info, fill = TRUE)
+    table_info <- bind_rows(table_info, info)
   }
 
   message(sprintf("Found %d supplementary table(s):", nrow(table_info)))
@@ -791,7 +793,7 @@ makeGeneSheet <- function(filter_expr = NULL,
           human_gene_symbol = NA_character_,
           human_ensembl_id = NA_character_
         )
-        result <- rbind(result, missing_rows, fill = TRUE)
+        result <- bind_rows(result, missing_rows)
       }
     }
   } else {
@@ -812,7 +814,7 @@ makeGeneSheet <- function(filter_expr = NULL,
           mouse_gene_symbol = NA_character_,
           mouse_ensembl_id = NA_character_
         )
-        result <- rbind(result, missing_rows, fill = TRUE)
+        result <- bind_rows(result, missing_rows)
       }
     }
   }
