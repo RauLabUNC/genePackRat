@@ -1,0 +1,25 @@
+{
+  "mode": "region",
+  "species": "mouse",
+  "genome": "mm39",
+  "initialization_date": "2025-11-22",
+  "package_version": "0.2.0",
+  "input_columns": [
+    "region_id",
+    "chr",
+    "start",
+    "end",
+    "genes"
+  ],
+  "n_entries": 1,
+  "supplementary_tables": {
+    "full_iso_scan": {
+      "link_type": "point",
+      "link_by": "auto",
+      "date_added": "2025-11-22",
+      "n_rows": 61,
+      "n_cols": 11,
+      "columns": ["chr", "region_id", "start", "end", "genes", "pos", "p", "lod", "marker", "i.start", "i.end"]
+    }
+  }
+}
