@@ -60,7 +60,13 @@ These modes can be combined - first join with reference, then apply filters.
 }
 \examples{
 # Example 1: Filter genes by a reference list (e.g., expressed genes)
+allGenes <- data.frame(
+  gene_symbol = c("Abc1", "Def2", "Ghi3", "Jkl4"),
+  expression = c(10, 50, 200, 0)
+)
+
 expressedGenes <- data.frame(gene_symbol = c("Abc1", "Def2", "Ghi3"))
+
 filtered <- filterGenes(
   inputTable = allGenes,
   referenceTable = expressedGenes,
@@ -69,47 +75,12 @@ filtered <- filterGenes(
 )
 
 # Example 2: Anti-join to exclude genes
-excludeList <- data.frame(ensembl_id = c("ENSG001", "ENSG002"))
+excludeList <- data.frame(gene = c("Def2", "Jkl4"))
 filtered <- filterGenes(
   inputTable = allGenes,
   referenceTable = excludeList,
-  by = c("gene_id" = "ensembl_id"),  # Different column names
+  by = c("gene_symbol" = "gene"),  # Different column names
   joinType = "anti"  # Exclude genes in the list
-)
-
-# Example 3: Join with annotations and filter
-filtered <- filterGenes(
-  inputTable = genes,
-  referenceTable = annotations,
-  by = "gene_id",
-  joinType = "left",
-  filters = list(
-    makeFilter("biotype", "==", "protein_coding"),
-    makeFilter("expression_level", ">", 100)
-  )
-)
-
-# Example 4: Direct filtering without reference table
-filtered <- filterGenes(
-  inputTable = genes,
-  filters = list(
-    makeFilter("chromosome", "\%in\%", c(1, 2, 3)),
-    function(df) df$start_pos > 1000000
-  )
-)
-
-# Example 5: Complex relational filtering
-# Get genes that are in GWAS hits AND have high expression
-gwasHits <- read.csv("gwas_significant_genes.csv")
-filtered <- filterGenes(
-  inputTable = geneExpression,
-  referenceTable = gwasHits,
-  by = c("symbol" = "gene_name"),
-  joinType = "inner",
-  filters = list(
-    makeFilter("TPM", ">", 50),
-    makeFilter("pvalue", "<", 0.05)
-  )
 )
 
 }

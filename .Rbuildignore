@@ -1,0 +1,13 @@
+^\.locusPackRat$
+^scripts$
+^temp_lib$
+^\.git$
+^figures$
+^.*\.Rcheck$
+^.*\.claude.*$
+^atacseq_analysis$
+^cancer_genes$
+^rnaseq_analysis$
+^examples$
+^environment\.yml$
+^plotting.R$

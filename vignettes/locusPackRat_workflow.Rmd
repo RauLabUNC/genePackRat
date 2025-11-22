@@ -52,7 +52,7 @@ The package includes complete genome-wide coordinate files generated from Ensemb
 
 ```{r install, eval=FALSE}
 # Install from GitHub
-devtools::install_github("RauLabUNC/locusPackRat")
+#devtools::install_github("RauLabUNC/locusPackRat")
 
 # Load required libraries
 library(locusPackRat)
@@ -68,7 +68,7 @@ library(jsonlite)
 
 # Gene Mode Analysis
 
-Gene mode is designed for analyzing gene lists from RNA-seq, QTL mapping, or other gene-centric studies.
+Gene mode is designed for analyzing gene lists from RNA-seq or other gene-centric studies.
 
 ## Initialize Project with Gene List
 
@@ -251,10 +251,13 @@ addRatTable(
 tf_list <- c("CTCF", "NFKB", "AP1", "ETS1", "GATA1", "SOX2", "OCT4", "NANOG",
             "MYC", "MAX", "STAT3", "CREB", "SP1", "YY1", "REST")
 
+# Create random starts
+random_starts <- sample(regions$start, 120, replace = TRUE)
+
 motif_data <- data.table(
   chr = sample(regions$chr, 120, replace = TRUE),
-  start = sample(regions$start, 120, replace = TRUE),
-  end = sample(regions$end, 120, replace = TRUE),
+  start = random_starts,
+  end = random_starts + sample(50:200, 120, replace = TRUE),
   tf_name = sample(tf_list, 120, replace = TRUE),
   motif_score = round(runif(120, 6, 15), 2),
   p_value = 10^(-runif(120, 2, 8))
@@ -390,11 +393,10 @@ makeGeneSheet(
   output_file = "cancer_genes_analysis.xlsx",
   split_by = "criteria",
   split_criteria = list(
-    "All_Genes" = "TRUE",
     "High_Frequency" = "mutation_frequency > 30",
     "FDA_Targets" = "FDA_approved_drug == TRUE",
     "Breast_Cancer" = "cancer_type == 'breast'",
-    "With_Mouse_Ortholog" = "!is.na(mouse_symbol)"
+    "With_Mouse_Ortholog" = "!is.na(mouse_gene_symbol)"
   ),
   include_supplementary = TRUE,
   project_dir = "cancer_genes"
@@ -454,182 +456,6 @@ makeGeneSheet(
   project_dir = "rnaseq_analysis"
 )
 ```
-
-# Advanced Filtering with filterGenes()
-
-The `filterGenes()` function provides powerful relational filtering capabilities for working with genomic data. It can be used with data loaded from your locusPackRat projects to perform complex filtering operations.
-
-## Basic Filtering
-
-Filter genes or regions based on conditions in your data:
-
-```{r basic_filter, eval=FALSE}
-# Load processed genes from project
-genes <- fread("rnaseq_analysis/.locusPackRat/input/genes.csv")
-
-# Filter for significant differential expression
-significant_genes <- filterGenes(
-  genes,
-  filters = list(
-    makeFilter("padj", "<", 0.05),
-    makeFilter("abs(log2FC)", ">", 2)
-  )
-)
-
-# Filter for specific chromosomes
-chr_subset <- filterGenes(
-  genes,
-  filters = list(
-    makeFilter("chr", "%in%", c("1", "2", "3", "X"))
-  )
-)
-```
-
-## Relational Filtering
-
-Use reference tables to include or exclude genes:
-
-```{r relational_filter, eval=FALSE}
-# Load supplementary data
-tissue_expr <- fread("rnaseq_analysis/.locusPackRat/supplementary/tissue_expression.csv")
-pathways <- fread("rnaseq_analysis/.locusPackRat/supplementary/pathway_annotations.csv")
-
-# Keep only genes with brain-specific expression
-brain_genes <- filterGenes(
-  genes,
-  ref_data = tissue_expr,
-  join_type = "semi",
-  join_by = c("gene_symbol" = "gene_symbol"),
-  filters = list(
-    makeFilter("max_tissue", "==", "brain"),
-    makeFilter("tissue_specific", "==", TRUE)
-  )
-)
-
-# Exclude genes in immune pathways
-non_immune <- filterGenes(
-  genes,
-  ref_data = pathways,
-  join_type = "anti",
-  join_by = c("gene_symbol" = "gene_symbol"),
-  filters = list(
-    makeFilter("pathway", "==", "Immune response")
-  )
-)
-
-# Add pathway information to genes (left join)
-genes_with_pathways <- filterGenes(
-  genes,
-  ref_data = pathways,
-  join_type = "left",
-  join_by = c("gene_symbol" = "gene_symbol")
-)
-```
-
-## Complex Filter Conditions
-
-The `makeFilter()` function supports various comparison operators:
-
-```{r complex_filters, eval=FALSE}
-# Numeric comparisons
-high_expr <- makeFilter("baseMean", ">", 1000)
-mid_range <- makeFilter("log2FC", "between", c(-1, 1))
-
-# String matching
-mouse_genes <- makeFilter("gene_symbol", "matches", "^[A-Z][a-z]+[0-9]*$")
-human_genes <- makeFilter("gene_symbol", "matches", "^[A-Z0-9]+$")
-
-# Set membership
-cancer_genes <- makeFilter("gene_symbol", "%in%", c("Tp53", "Myc", "Kras", "Pten"))
-not_mitochondrial <- makeFilter("chr", "%nin%", c("MT", "M"))
-
-# NA handling
-has_ortholog <- makeFilter("mouse_symbol", "not_na")
-missing_data <- makeFilter("padj", "is_na")
-
-# Combine multiple filters
-complex_filter <- filterGenes(
-  genes,
-  filters = list(
-    makeFilter("chr", "%in%", c("1", "2", "3")),
-    makeFilter("padj", "<", 0.01),
-    makeFilter("abs(log2FC)", ">", 1.5),
-    makeFilter("baseMean", ">", 100)
-  )
-)
-```
-
-## Integration with makeGeneSheet()
-
-Use filterGenes() to pre-process data before generating output:
-
-```{r filter_then_export, eval=FALSE}
-# Filter genes first
-filtered_genes <- filterGenes(
-  genes,
-  ref_data = tissue_expr,
-  join_type = "inner",
-  join_by = c("gene_symbol" = "gene_symbol"),
-  filters = list(
-    makeFilter("tissue_specific", "==", TRUE),
-    makeFilter("padj", "<", 0.05)
-  )
-)
-
-# Save filtered results back to project
-fwrite(filtered_genes, "rnaseq_analysis/.locusPackRat/input/genes_filtered.csv")
-
-# Generate Excel with filtered data
-makeGeneSheet(
-  format = "excel",
-  output_file = "tissue_specific_DEGs.xlsx",
-  filter_expr = "tissue_specific == TRUE",
-  include_supplementary = TRUE,
-  project_dir = "rnaseq_analysis"
-)
-```
-
-## Working with Region Data
-
-filterGenes() also works with genomic regions from ATAC-seq or ChIP-seq:
-
-```{r filter_regions, eval=FALSE}
-# Load regions
-regions <- fread("atacseq_analysis/.locusPackRat/input/regions.csv")
-chromatin <- fread("atacseq_analysis/.locusPackRat/supplementary/chromatin_states.csv")
-
-# Filter for active regulatory regions
-active_regions <- filterGenes(
-  regions,
-  ref_data = chromatin,
-  join_type = "semi",
-  join_by = c("chr" = "chr", "start" = "start", "end" = "end"),
-  filters = list(
-    makeFilter("state", "%in%", c("Active_Promoter", "Strong_Enhancer"))
-  )
-)
-
-# High-confidence peaks with TF binding
-tf_motifs <- fread("atacseq_analysis/.locusPackRat/supplementary/tf_motifs.csv")
-high_conf_peaks <- filterGenes(
-  regions,
-  ref_data = tf_motifs,
-  join_type = "semi",
-  join_by = c("chr" = "chr", "start" = "start", "end" = "end"),
-  filters = list(
-    makeFilter("fold_enrichment", ">", 10),
-    makeFilter("qvalue", "<", 1e-10),
-    makeFilter("motif_score", ">", 12)
-  )
-)
-```
-
-## Performance Tips
-
-- Use `semi` join for efficient filtering when you only need to check existence
-- Use `anti` join to exclude records matching criteria
-- Chain multiple filterGenes() calls for complex multi-step filtering
-- Consider saving intermediate results for reuse
 
 # Session Information
 

@@ -15,7 +15,8 @@
 #'       in tests/test_data/ (or inst/extdata/ when installed as a package).
 #'       Currently supports mm39 (mouse) and hg38 (human) genomes.
 #'
-#' @importFrom data.table fread fwrite setDT := copy 
+#' @importFrom utils head packageVersion
+#' @importFrom data.table setnames fread fwrite setDT := copy
 #' @importFrom dplyr bind_rows
 #' @importFrom jsonlite write_json read_json
 #'
@@ -330,7 +331,7 @@ listPackRatTables <- function(project_dir = ".") {
 
   message(sprintf("Found %d supplementary table(s):", nrow(table_info)))
   for (i in seq_len(nrow(table_info))) {
-    message(sprintf("  - %s: %d rows × %d cols, linked by '%s'",
+    message(sprintf("  - %s: %d rows with %d cols, linked by '%s'",
                    table_info$table_name[i],
                    table_info$n_rows[i],
                    table_info$n_cols[i],
@@ -549,10 +550,18 @@ makeGeneSheet <- function(filter_expr = NULL,
   }
 
   # Determine output file
+  output_dir <- file.path(packrat_dir, "output")
+  
   if (is.null(output_file)) {
     extension <- ifelse(format == "excel", ".xlsx", ".csv")
-    output_file <- file.path(packrat_dir, "output", paste0("gene_sheet", extension))
+    filename <- paste0("gene_sheet", extension)
+  } else {
+    # If user provides a name, strip any path and force it into the output dir
+    filename <- basename(output_file)
   }
+  
+  # Construct the final forced path
+  output_file <- file.path(output_dir, filename)
 
   # Save output
   if (format == "csv") {
@@ -689,7 +698,6 @@ makeGeneSheet <- function(filter_expr = NULL,
       }
     }
   }
-
   # Final check
   missing <- setdiff(required, names(data))
   if (length(missing) > 0) {
@@ -704,11 +712,32 @@ makeGeneSheet <- function(filter_expr = NULL,
   if (!"region_id" %in% names(data)) {
     data[, region_id := paste0("region_", .I)]
   }
+  # Get genes in regions
+  coord_type <- paste0(species, "_coords_", genome, ".csv")
+  coords_file <- system.file("extdata", coord_type, package = "locusPackRat")
+  coords <- fread(coords_file)
 
-  # Get genes in regions (placeholder - will be implemented with genome cache)
-  data[, genes := NA_character_]
-
-  return(data)
+  # Ensure numeric coordinates
+  coords[, start := as.numeric(start)]
+  coords[, end := as.numeric(end)]
+  # look for overlaps
+  overlaps <- coords[data,
+                      .(region_id = i.region_id, gene_symbol = x.gene_symbol), 
+                      on = .(chr, start <= end, end >= start),
+                      nomatch = NULL]
+  if (nrow(overlaps) > 0) {
+      # Collapse multiple genes into a single comma-separated string
+      genes_aggregated <- overlaps[, .(genes = paste(unique(gene_symbol), collapse = ", ")),
+                                  by = region_id]
+      
+      # Merge back to the original data
+      data <- merge(data, genes_aggregated, by = "region_id", all.x = TRUE)
+      
+  } else {
+      # If no overlaps found, create empty column
+      data[, genes := NA_character_]
+  }
+return(data)
 }
 
 #' Generate Orthology Table
@@ -895,13 +924,14 @@ makeGeneSheet <- function(filter_expr = NULL,
 #' Expand Regions to Genes
 #' @noRd
 .expandRegionsToGenes <- function(region_data) {
-  if (!"genes" %in% names(region_data)) {
-    warning("No gene information in regions, returning empty gene table")
+  if (!"genes" %in% names(region_data) || all(is.na(region_data$genes)) || all(region_data$genes == "")) {
+    warning("`genes` column is missing or empty, returning empty gene table")
     return(data.table())
   }
 
+  region_data[, genes := as.character(genes)]
   # Split comma-separated genes
-  genes_list <- strsplit(region_data$genes, ",")
+  genes_list <- strsplit(region_data$genes, ", ")
 
   # Create expanded table
   result <- region_data[rep(seq_len(nrow(region_data)), lengths(genes_list))]
@@ -1016,18 +1046,19 @@ makeGeneSheet <- function(filter_expr = NULL,
       cols = 1:ncol(sheet_data)
     )
 
-    # Apply striped rows
-    for (i in seq(2, nrow(sheet_data) + 1, by = 2)) {
-      openxlsx::addStyle(
-        wb,
-        sheet = sheet_name,
-        style = stripe_style,
-        rows = i,
-        cols = 1:ncol(sheet_data),
-        gridExpand = TRUE
-      )
+  # Apply striped rows
+    if (nrow(sheet_data) > 0) {
+      for (i in seq(2, nrow(sheet_data) + 1, by = 2)) {
+        openxlsx::addStyle(
+          wb,
+          sheet = sheet_name,
+          style = stripe_style,
+          rows = i,
+          cols = 1:ncol(sheet_data),
+          gridExpand = TRUE
+        )
+      }
     }
-
     # Apply highlighting
     rows_to_highlight <- c()
 

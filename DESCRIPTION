@@ -24,12 +24,12 @@ Imports:
     data.table (>= 1.14.0),
     jsonlite (>= 1.8.0),
     openxlsx (>= 4.2.0),
-    dplyr (>= 1.0.0),
-    tidyr,
-    plotgardener,
-    RColorBrewer
+    dplyr (>= 1.0.0)
 Suggests:
     BiocManager,
+    tidyr,
+    plotgardener,
+    RColorBrewer,
     GenomicRanges,
     GenomeInfoDb,
     BiocGenerics,
@@ -40,7 +40,7 @@ Suggests:
     usethis,
     TxDb.Mmusculus.UCSC.mm39.knownGene,
     org.Mm.eg.db
-RoxygenNote: 7.3.2
+RoxygenNote: 7.3.3
 VignetteBuilder: knitr
 URL: https://github.com/RauLabUNC/locusPackRat
 BugReports: https://github.com/RauLabUNC/locusPackRat/issues

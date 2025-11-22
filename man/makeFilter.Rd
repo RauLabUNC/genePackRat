@@ -9,7 +9,7 @@ makeFilter(column, condition, value = NULL, na.rm = FALSE)
 \arguments{
 \item{column}{Column name to filter on}
 
-\item{condition}{Condition to apply (==, !=, >, <, >=, <=, %in%, etc.)}
+\item{condition}{Condition to apply (==, !=, >, <, >=, <=, \%in\%, etc.)}
 
 \item{value}{Value(s) to compare against}
 
