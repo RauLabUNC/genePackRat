@@ -122,28 +122,33 @@ initPackRat <- function(data,
 
 #' Add Supplementary Table to locusPackRat Project
 #'
-#' Adds supplementary data tables linked to genes or regions in an existing project
+#' Adds supplementary data tables linked to genes or regions in an existing project.
+#' Can handle gene-based data, genomic regions, or point coordinates (e.g., SNPs).
 #'
 #' @param data data.frame or data.table with supplementary information
 #' @param table_name Character: Name for the output table (without .csv extension)
-#' @param link_type Character: "gene" or "region" - what to link the data to
-#' @param link_by Character: Column name in data to use for linking (e.g., "gene_symbol", "ensembl_id", or for regions: "chr,start,end")
+#' @param link_type Character: "gene", "region", or "point".
+#'                  "point" treats data as genomic positions (SNPs) and maps them to overlapping regions.
+#' @param link_by Character: Column name in data to use for linking.
 #' @param project_dir Character: Path to project directory containing .locusPackRat
 #'
 #' @return Invisible TRUE on success
 #'
-#' @importFrom data.table fread fwrite setDT merge.data.table :=
+#' @importFrom data.table fread fwrite setDT merge.data.table := setnames
 #' @importFrom jsonlite read_json write_json
 #'
 #' @export
 addRatTable <- function(data,
-                       table_name,
-                       link_type = c("gene", "region"),
-                       link_by = NULL,
-                       project_dir = ".") {
+                        table_name,
+                        link_type = c("gene", "region", "point"),
+                        link_by = NULL,
+                        project_dir = ".") {
 
   # Validate inputs
   link_type <- match.arg(link_type)
+  # Preserve the original type for the config file
+  original_link_type <- link_type
+  
   if (missing(table_name) || is.null(table_name)) {
     stop("table_name must be provided")
   }
@@ -166,6 +171,43 @@ addRatTable <- function(data,
 
   # Convert input to data.table
   setDT(data)
+
+  # --- HANDLE POINT DATA ---
+  # If "point", normalize to "region" format (start == end)
+  if (link_type == "point") {
+    message("Normalizing point data to genomic intervals...")
+    
+    # 1. Standardize Chromosome column
+    if (!"chr" %in% names(data)) {
+       # Try standard alternatives (e.g., chrom, chromosome, seqname)
+       chr_col <- grep("^chr|^chrom|^seqname", names(data), value=TRUE, ignore.case=TRUE)[1]
+       if (!is.na(chr_col)) {
+         setnames(data, chr_col, "chr")
+         message(sprintf("  Mapping '%s' to 'chr'", chr_col))
+       } else {
+         stop("Link type 'point' requires a chromosome column (e.g., 'chr', 'chrom')")
+       }
+    }
+    
+    # 2. Standardize Position column
+    if (!"pos" %in% names(data)) {
+       # Try standard alternatives (e.g., pos, bp, location, start)
+       pos_col <- grep("^pos|^bp|^loc|^start", names(data), value=TRUE, ignore.case=TRUE)[1]
+       if (!is.na(pos_col)) {
+         setnames(data, pos_col, "pos")
+         message(sprintf("  Mapping '%s' to 'pos'", pos_col))
+       } else {
+         stop("Link type 'point' requires a position column (e.g., 'pos', 'bp')")
+       }
+    }
+    
+    # 3. Create start/end for overlap joining (Point is an interval of width 0 or 1)
+    data[, start := as.numeric(pos)]
+    data[, end := as.numeric(pos)]
+    
+    # Switch processing mode to "region" for the rest of the function
+    link_type <- "region"
+  }
 
   # Load existing data based on link type and config mode
   if (link_type == "gene") {
@@ -200,18 +242,7 @@ addRatTable <- function(data,
     linked_data <- .linkGeneData(data, existing_data, link_by)
 
   } else {
-    # Region linking
-    regions_file <- file.path(packrat_dir, "input", "regions.csv")
-    if (!file.exists(regions_file)) {
-      if (config$mode == "gene") {
-        stop("Project was initialized in gene mode. Cannot link region data without regions.")
-      }
-      stop("Regions file not found")
-    }
-    existing_data <- fread(regions_file)
-
-    message("Linking data by genomic overlap...")
-    linked_data <- .linkRegionData(data, existing_data, config$genome)
+    linked_data <- data
   }
 
   # Save supplementary table
@@ -226,7 +257,7 @@ addRatTable <- function(data,
   }
 
   config$supplementary_tables[[table_name]] <- list(
-    link_type = link_type,
+    link_type = original_link_type, # Store what the user actually requested
     link_by = ifelse(is.null(link_by), "auto", link_by),
     date_added = Sys.Date(),
     n_rows = nrow(linked_data),
@@ -341,6 +372,35 @@ listPackRatTables <- function(project_dir = ".") {
   return(table_info)
 }
 
+#' Collapse Column Values for Merging
+#' @noRd
+.collapse_column <- function(x) {
+  # Drop NAs and empty strings (if character)
+  if (is.character(x)) {
+    x <- x[x != ""]
+  }
+  x <- unique(x[!is.na(x)])
+
+  # If no values left, return NA of the *same type* as the column
+  if (length(x) == 0L) {
+    return(x[NA_integer_])   # NA with same typeof(x)
+  }
+
+  # If only one value, just return it (keeps original type)
+  if (length(x) == 1L) {
+    return(x)
+  }
+
+  # If character and multiple values, paste them
+  if (is.character(x)) {
+    return(paste(x, collapse = "; "))
+  }
+
+  # For non-character with multiple distinct values, just keep the first
+  # (keeps type numeric/logical/etc, avoids mixing with character)
+  x[1L]
+}
+
 #' Generate Gene Sheet from locusPackRat Project
 #'
 #' Creates formatted gene sheets (CSV or Excel) from project data with optional filtering and highlighting
@@ -356,6 +416,10 @@ listPackRatTables <- function(project_dir = ".") {
 #' @param split_criteria Named list: For split_by="criteria", list of tab_name = filter_expression
 #' @param include_supplementary Logical or character vector: TRUE to include all supplementary tables,
 #'                               FALSE for none, or character vector of specific table names to include
+#' @param collapse_multiples Logical: when merging supplementary tables,
+#'   collapse multiple matches per key into a single row by aggregating
+#'   values (e.g. concatenating text). If FALSE, keep all matches as
+#'   separate rows.
 #' @param project_dir Character: Path to project directory containing .locusPackRat
 #'
 #' @return data.table of the gene sheet (invisible)
@@ -366,227 +430,196 @@ listPackRatTables <- function(project_dir = ".") {
 #'
 #' @export
 makeGeneSheet <- function(filter_expr = NULL,
-                            highlight_genes = NULL,
-                            highlight_expr = NULL,
-                            highlight_color = "#FFFF99",
-                            summary_level = c("gene", "locus"),
-                            output_file = NULL,
-                            format = c("excel", "csv"),
-                            split_by = c("none", "chromosome", "criteria"),
-                            split_criteria = NULL,
-                            include_supplementary = TRUE,
-                            project_dir = ".") {
+                          highlight_genes = NULL,
+                          highlight_expr = NULL,
+                          highlight_color = "#FFFF99",
+                          summary_level = c("gene", "locus"),
+                          output_file = NULL,
+                          format = c("excel", "csv"),
+                          split_by = c("none", "chromosome", "criteria"),
+                          split_criteria = NULL,
+                          include_supplementary = TRUE,
+                          collapse_multiples = TRUE,
+                          project_dir = ".") {
 
-  # Validate inputs
   summary_level <- match.arg(summary_level)
   format <- match.arg(format)
   split_by <- match.arg(split_by)
 
-  # Check for existing project
   packrat_dir <- file.path(project_dir, ".locusPackRat")
-  if (!dir.exists(packrat_dir)) {
-    stop("No .locusPackRat directory found. Run initPackRat() first.")
-  }
+  if (!dir.exists(packrat_dir)) stop(sprintf("No .locusPackRat directory found at %s", packrat_dir))
 
-  # Read config
-  config_file <- file.path(packrat_dir, "config.json")
-  if (!file.exists(config_file)) {
-    stop("Config file not found. Project may be corrupted.")
-  }
-  config <- jsonlite::read_json(config_file)
+  config <- jsonlite::read_json(file.path(packrat_dir, "config.json"))
+  message(sprintf("Generating %s sheet from %s...", config$mode, packrat_dir))
 
-  message(sprintf("Generating gene sheet from %s %s %s project...",
-                  config$species, config$genome, config$mode))
-
-  # Load base data
+  # 1. LOAD BASE DATA
   if (config$mode == "gene") {
-    genes_file <- file.path(packrat_dir, "input", "genes.csv")
-    if (!file.exists(genes_file)) {
-      stop("Genes file not found")
-    }
-    base_data <- fread(genes_file)
+    base_data <- fread(file.path(packrat_dir, "input", "genes.csv"))
+    if(!"pk_id" %in% names(base_data)) base_data[, pk_id := .I]
   } else {
-    # Region mode - need to expand to genes
-    regions_file <- file.path(packrat_dir, "input", "regions.csv")
-    if (!file.exists(regions_file)) {
-      stop("Regions file not found")
-    }
-    region_data <- fread(regions_file)
+    region_data <- fread(file.path(packrat_dir, "input", "regions.csv"))
     base_data <- .expandRegionsToGenes(region_data)
+    if(!"pk_id" %in% names(base_data)) base_data[, pk_id := .I]
   }
 
-  # Load orthology data if exists
+  # 2. LOAD ORTHOLOGY
   ortho_file <- file.path(packrat_dir, "input", "orthology.csv")
   if (file.exists(ortho_file)) {
     ortho_data <- fread(ortho_file)
+    if ("ortho_species" %in% names(ortho_data)) ortho_data[, ortho_species := NULL]
 
-    # Remove ortho_species column as it's redundant
-    if ("ortho_species" %in% names(ortho_data)) {
-      ortho_data[, ortho_species := NULL]
-    }
-
-    # Determine the correct merge column based on species
     if (config$species == "mouse") {
-      merge_by_x <- "gene_symbol"
-      merge_by_y <- "mouse_gene_symbol"
-      # Remove redundant columns after merge
-      cols_to_remove <- c("mouse_gene_symbol", "mouse_ensembl_id")
-      # Keep only the cross-species ortholog info
-      cols_to_keep <- c("human_gene_symbol", "human_ensembl_id")
+      mx <- "gene_symbol"; my <- "mouse_gene_symbol"; keep <- c("human_gene_symbol", "human_ensembl_id")
     } else {
-      merge_by_x <- "gene_symbol"
-      merge_by_y <- "human_gene_symbol"
-      # Remove redundant columns after merge
-      cols_to_remove <- c("human_gene_symbol", "human_ensembl_id")
-      # Keep only the cross-species ortholog info
-      cols_to_keep <- c("mouse_gene_symbol", "mouse_ensembl_id")
+      mx <- "gene_symbol"; my <- "human_gene_symbol"; keep <- c("mouse_gene_symbol", "mouse_ensembl_id")
     }
 
-    # Only merge if columns exist
-    if (merge_by_x %in% names(base_data) && merge_by_y %in% names(ortho_data)) {
-      # Select only needed columns from ortho_data before merge
-      ortho_cols <- c(merge_by_y, cols_to_keep)
-      ortho_cols <- ortho_cols[ortho_cols %in% names(ortho_data)]
-      ortho_subset <- ortho_data[, ..ortho_cols]
-
-      base_data <- merge(base_data, ortho_subset,
-                        by.x = merge_by_x, by.y = merge_by_y,
-                        all.x = TRUE)
+    if (mx %in% names(base_data) && my %in% names(ortho_data)) {
+      base_data <- merge(base_data, ortho_data[, c(my, keep), with=FALSE], by.x = mx, by.y = my, all.x = TRUE)
     }
   }
 
-  # Include supplementary tables
+  # 3. LINK SUPPLEMENTARY TABLES
   if (!isFALSE(include_supplementary)) {
     supp_dir <- file.path(packrat_dir, "supplementary")
+    
     if (dir.exists(supp_dir)) {
-      # Get list of available supplementary files
-      all_supp_files <- list.files(supp_dir, pattern = "\\.csv$", full.names = FALSE)
-      all_table_names <- sub("\\.csv$", "", all_supp_files)
-
-      # Determine which tables to include
-      if (isTRUE(include_supplementary)) {
-        # Include all tables
-        tables_to_include <- all_table_names
-      } else if (is.character(include_supplementary)) {
-        # Include only specified tables
-        tables_to_include <- intersect(include_supplementary, all_table_names)
-        missing_tables <- setdiff(include_supplementary, all_table_names)
-        if (length(missing_tables) > 0) {
-          warning(sprintf("Requested supplementary tables not found: %s",
-                         paste(missing_tables, collapse = ", ")))
-        }
+      all_supp <- list.files(supp_dir, pattern = "\\.csv$", full.names = FALSE)
+      
+      # Debug: Check what files are found
+      if(length(all_supp) == 0) {
+        warning(sprintf("No CSV files found in supplementary directory: %s", supp_dir))
       } else {
-        tables_to_include <- character(0)
+        message(sprintf("Found %d supplementary files: %s", length(all_supp), paste(all_supp, collapse=", ")))
       }
 
-      # Process each table
-      for (table_name in tables_to_include) {
-        sf <- file.path(supp_dir, paste0(table_name, ".csv"))
-        message(sprintf("  Including supplementary table: %s", table_name))
-        supp_data <- fread(sf)
+      if (is.character(include_supplementary)) {
+        tables_to_include <- intersect(paste0(include_supplementary, ".csv"), all_supp)
+      } else {
+        tables_to_include <- all_supp
+      }
 
-        # Check config for this table's linking information
-        table_info <- NULL
-        if (!is.null(config$supplementary_tables) &&
-            table_name %in% names(config$supplementary_tables)) {
-          table_info <- config$supplementary_tables[[table_name]]
+      for (sf in tables_to_include) {
+        table_name <- sub("\\.csv$", "", sf)
+        supp_data <- fread(file.path(supp_dir, sf))
+        
+        # --- A. DETECT KEYS ---
+        merge_cols <- NULL
+        # Check Config
+        if (!is.null(config$supplementary_tables[[table_name]]$link_by) && config$supplementary_tables[[table_name]]$link_by != "auto") {
+          merge_cols <- trimws(strsplit(config$supplementary_tables[[table_name]]$link_by, ",")[[1]])
+        }
+        # Fallback Auto-detect
+        if (is.null(merge_cols)) {
+          common <- intersect(names(base_data), names(supp_data))
+          if ("region_id" %in% common) merge_cols <- "region_id"
+          else if (all(c("chr", "start", "end") %in% common)) merge_cols <- c("chr", "start", "end")
+          else if ("gene_symbol" %in% common) merge_cols <- "gene_symbol"
         }
 
-        # Determine linking column from config or auto-detect
-        if (!is.null(table_info) && !is.null(table_info$link_by) &&
-            table_info$link_by != "auto") {
-          # Use link column from config
-          link_by <- table_info$link_by
-          if (link_by %in% names(supp_data) && link_by %in% names(base_data)) {
-            merge_by <- link_by
+        # --- B. EXECUTE MERGE LOGIC ---
+        if (!is.null(merge_cols)) {
+          # Capture columns we EXPECT to add (for safety filling later)
+          expected_cols <- setdiff(names(supp_data), merge_cols)
+
+          # CASE 1: COORDINATE OVERLAP (Interval Join)
+          if (all(c("chr", "start", "end") %in% merge_cols)) {
+             message(sprintf("  Linking %s using Interval Overlap...", table_name))
+             
+             # Normalize Coordinates
+             supp_data[, chr := gsub("^chr", "", as.character(chr), ignore.case=TRUE)]
+             supp_data[, start := as.integer(start)][, end := as.integer(end)]
+             base_data[, chr := gsub("^chr", "", as.character(chr), ignore.case=TRUE)]
+             base_data[, start := as.integer(start)][, end := as.integer(end)]
+
+             # Non-Equi Join
+             # Note: This join might produce 0 rows if no overlaps
+             overlap_join <- supp_data[base_data, 
+                                       on = .(chr, start <= end, end >= start), 
+                                       nomatch = NULL] 
+             
+             val_cols <- setdiff(names(supp_data), c("chr", "start", "end"))
+             
+             if (length(val_cols) > 0) {
+               # Aggregation
+              collapsed_vals <- overlap_join[
+                ,
+                lapply(.SD, .collapse_column),
+                by = pk_id,
+                .SDcols = val_cols
+              ]
+               
+               # Merge
+               base_data <- merge(base_data, collapsed_vals, by = "pk_id", all.x = TRUE)
+             }
+
           } else {
-            # Fallback to auto-detect
-            link_cols <- c("gene_symbol", "ensembl_id", "region_id")
-            common_link <- intersect(names(base_data), intersect(names(supp_data), link_cols))
-            merge_by <- if(length(common_link) > 0) common_link[1] else NULL
+            # CASE 2: EXACT MERGE
+            message(sprintf("  Linking %s (Exact Match: %s)", table_name, paste(merge_cols, collapse=",")))
+            
+            if (collapse_multiples) {
+              val_cols <- setdiff(names(supp_data), merge_cols)
+              if (length(val_cols) > 0) {
+                supp_data <- supp_data[
+                  ,
+                  lapply(.SD, .collapse_column),
+                  by = merge_cols,
+                  .SDcols = val_cols
+                ]
+              } else {
+                supp_data <- unique(supp_data)
+              }
+            }
+            base_data <- merge(base_data, supp_data, by = merge_cols, all.x = TRUE, suffixes = c("", paste0(".", table_name)))
           }
-        } else {
-          # Auto-detect linking column
-          link_cols <- c("gene_symbol", "ensembl_id", "region_id")
-          common_link <- intersect(names(base_data), intersect(names(supp_data), link_cols))
-          merge_by <- if(length(common_link) > 0) common_link[1] else NULL
-        }
-
-        if (!is.null(merge_by)) {
-          # Perform merge
-          n_before <- nrow(base_data)
-          base_data <- merge(base_data, supp_data, by = merge_by, all.x = TRUE, suffixes = c("", ".y"))
-
-          # Remove duplicate columns with .y suffix if any
-          y_cols <- grep("\\.y$", names(base_data), value = TRUE)
-          if (length(y_cols) > 0) {
-            base_data[, (y_cols) := NULL]
+          
+          # SAFETY CHECK: Ensure expected columns exist
+          # If merge failed or yielded 0 matches, columns might be missing.
+          # We force add them as NA to prevent 'Object not found' errors in filtering.
+          missing_cols <- setdiff(expected_cols, names(base_data))
+          if(length(missing_cols) > 0) {
+             message(sprintf("    Warning: %s matched 0 rows. Adding empty columns: %s", table_name, paste(missing_cols, collapse=", ")))
+             base_data[, (missing_cols) := NA]
           }
 
-          message(sprintf("    Merged on '%s' column", merge_by))
+          # Clean suffixes
+          bad_cols <- grep(paste0("\\.", table_name, "$"), names(base_data), value = TRUE)
+          if(length(bad_cols) > 0) base_data[, (bad_cols) := NULL]
+
         } else {
-          warning(sprintf("    Could not find common linking column for table '%s'", table_name))
+          warning(sprintf("  Skipping %s: No link columns found.", table_name))
         }
-      }
-    } else {
-      message("  No supplementary tables directory found")
+      } 
     }
   }
 
-  # Apply filter if specified
+  if("pk_id" %in% names(base_data)) base_data[, pk_id := NULL]
+
+  # 4. FILTERING
   if (!is.null(filter_expr)) {
-    message(sprintf("Applying filter: %s", filter_expr))
-    n_before <- nrow(base_data)
-    base_data <- base_data[eval(parse(text = filter_expr))]
-    message(sprintf("  Filtered from %d to %d genes", n_before, nrow(base_data)))
+    tryCatch({
+      base_data <- base_data[eval(parse(text = filter_expr))]
+    }, error = function(e) stop("Filter Expression Error: ", e$message))
   }
 
-  # Process based on summary level
-  if (summary_level == "locus") {
-    message("Summarizing at locus level...")
-    output_data <- .summarizeAtLocusLevel(base_data, config)
-  } else {
-    output_data <- base_data
-  }
+  # 5. SUMMARIZE & SAVE
+  output_data <- if (summary_level == "locus") .summarizeAtLocusLevel(base_data, config) else base_data
 
-  # Determine output file
   output_dir <- file.path(packrat_dir, "output")
-  
-  if (is.null(output_file)) {
-    extension <- ifelse(format == "excel", ".xlsx", ".csv")
-    filename <- paste0("gene_sheet", extension)
-  } else {
-    # If user provides a name, strip any path and force it into the output dir
-    filename <- basename(output_file)
-  }
-  
-  # Construct the final forced path
-  output_file <- file.path(output_dir, filename)
+  if (is.null(output_file)) output_file <- paste0("gene_sheet", ifelse(format == "excel", ".xlsx", ".csv"))
+  final_path <- file.path(output_dir, basename(output_file))
 
-  # Save output
   if (format == "csv") {
-    # Simple CSV output
-    fwrite(output_data, output_file)
-    message(sprintf("Saved gene sheet to %s", output_file))
+    fwrite(output_data, final_path)
+    message(sprintf("Saved CSV to %s", final_path))
   } else {
-    # Excel output with formatting
-    message("Creating formatted Excel workbook...")
-    wb <- .createFormattedExcel(
-      data = output_data,
-      highlight_genes = highlight_genes,
-      highlight_expr = highlight_expr,
-      highlight_color = highlight_color,
-      split_by = split_by,
-      split_criteria = split_criteria
-    )
-
-    openxlsx::saveWorkbook(wb, output_file, overwrite = TRUE)
-    message(sprintf("Saved formatted Excel to %s", output_file))
+    wb <- .createFormattedExcel(output_data, highlight_genes, highlight_expr, highlight_color, split_by, split_criteria)
+    openxlsx::saveWorkbook(wb, final_path, overwrite = TRUE)
+    message(sprintf("Saved Excel to %s", final_path))
   }
 
   invisible(output_data)
 }
-
 
 # ========== Helper Functions ==========
 
@@ -704,9 +737,10 @@ makeGeneSheet <- function(filter_expr = NULL,
     stop("Missing required columns for regions: ", paste(missing, collapse = ", "))
   }
 
-  # Ensure numeric coordinates
+  # Ensure numeric coordinates and character chromosome
   data[, start := as.numeric(start)]
   data[, end := as.numeric(end)]
+  data[, chr := as.character(chr)]
 
   # Add region ID if not present
   if (!"region_id" %in% names(data)) {
@@ -720,6 +754,8 @@ makeGeneSheet <- function(filter_expr = NULL,
   # Ensure numeric coordinates
   coords[, start := as.numeric(start)]
   coords[, end := as.numeric(end)]
+  coords[, chr := as.character(chr)]
+  
   # look for overlaps
   overlaps <- coords[data,
                       .(region_id = i.region_id, gene_symbol = x.gene_symbol), 
@@ -911,6 +947,11 @@ return(data)
   existing_regions[, start := as.numeric(start)]
   existing_regions[, end := as.numeric(end)]
 
+  # Force chromosome to character to avoid integer/character join errors
+  # (fread often guesses integer for simple chromosomes like "1", "2")
+  new_data[, chr := as.character(chr)]
+  existing_regions[, chr := as.character(chr)]
+
   # Find overlaps
   setkey(new_data, chr, start, end)
   setkey(existing_regions, chr, start, end)
@@ -977,128 +1018,73 @@ return(data)
   return(summary)
 }
 
-#' Create Formatted Excel Workbook
+#' Create Formatted Excel Workbook (Safely)
 #' @noRd
 .createFormattedExcel <- function(data, highlight_genes, highlight_expr,
-                                 highlight_color, split_by, split_criteria) {
-
+                                  highlight_color, split_by, split_criteria) {
+  
   wb <- openxlsx::createWorkbook()
-
-  # Header style
-  header_style <- openxlsx::createStyle(
-    textDecoration = "bold",
-    halign = "center",
-    border = "bottom",
-    borderStyle = "medium"
-  )
-
-  # Highlight style
-  highlight_style <- openxlsx::createStyle(
-    fgFill = highlight_color
-  )
-
-  # Striped row style
-  stripe_style <- openxlsx::createStyle(
-    fgFill = "#F0F0F0"
-  )
-
-  # Determine sheets to create
+  header_style <- openxlsx::createStyle(textDecoration = "bold", halign = "center", border = "bottom", borderStyle = "medium")
+  highlight_style <- openxlsx::createStyle(fgFill = highlight_color)
+  stripe_style <- openxlsx::createStyle(fgFill = "#F0F0F0")
+  
+  # Determine sheets
+  sheets <- list()
+  
   if (split_by == "none") {
-    sheets <- list("All Genes" = data)
+    sheets[["All Genes"]] <- data
   } else if (split_by == "chromosome") {
     if ("chr" %in% names(data)) {
       sheets <- split(data, data$chr)
       names(sheets) <- paste0("Chr_", names(sheets))
     } else {
-      warning("No chromosome column found, creating single sheet")
-      sheets <- list("All Genes" = data)
+      sheets[["All Genes"]] <- data
     }
   } else if (split_by == "criteria" && !is.null(split_criteria)) {
-    sheets <- list("All Genes" = data)
+    sheets[["All_Data"]] <- data
     for (tab_name in names(split_criteria)) {
-      filter_expr <- split_criteria[[tab_name]]
-      filtered <- data[eval(parse(text = filter_expr))]
-      sheets[[tab_name]] <- filtered
+      f_expr <- split_criteria[[tab_name]]
+      tryCatch({
+        # Verify columns exist before eval
+        # Note: eval might still fail if logic is wrong, but Object Not Found is usually missing cols.
+        filtered <- data[eval(parse(text = f_expr))]
+        sheets[[tab_name]] <- filtered
+      }, error = function(e) {
+        # Detailed warning
+        warning(sprintf("Skipping tab '%s': %s", tab_name, e$message))
+      })
     }
-  } else {
-    sheets <- list("All Genes" = data)
   }
-
-  # Create sheets
+  
   for (sheet_name in names(sheets)) {
     sheet_data <- sheets[[sheet_name]]
-
+    if (nrow(sheet_data) == 0) next
+    
     openxlsx::addWorksheet(wb, sheet_name)
-    openxlsx::writeDataTable(
-      wb,
-      sheet = sheet_name,
-      x = sheet_data,
-      tableName = gsub(" ", "_", sheet_name),
-      withFilter = TRUE
-    )
-
-    # Apply header style
-    openxlsx::addStyle(
-      wb,
-      sheet = sheet_name,
-      style = header_style,
-      rows = 1,
-      cols = 1:ncol(sheet_data)
-    )
-
-  # Apply striped rows
+    openxlsx::writeDataTable(wb, sheet = sheet_name, x = sheet_data, tableName = gsub("[^A-Za-z0-9]", "_", sheet_name), withFilter = TRUE)
+    openxlsx::addStyle(wb, sheet = sheet_name, style = header_style, rows = 1, cols = 1:ncol(sheet_data))
+    
     if (nrow(sheet_data) > 0) {
-      for (i in seq(2, nrow(sheet_data) + 1, by = 2)) {
-        openxlsx::addStyle(
-          wb,
-          sheet = sheet_name,
-          style = stripe_style,
-          rows = i,
-          cols = 1:ncol(sheet_data),
-          gridExpand = TRUE
-        )
-      }
+      rows <- seq(2, nrow(sheet_data) + 1, by = 2)
+      openxlsx::addStyle(wb, sheet = sheet_name, style = stripe_style, rows = rows, cols = 1:ncol(sheet_data), gridExpand = TRUE)
     }
-    # Apply highlighting
-    rows_to_highlight <- c()
-
+    
+    rows_to_hl <- c()
     if (!is.null(highlight_genes) && "gene_symbol" %in% names(sheet_data)) {
-      rows_to_highlight <- which(sheet_data$gene_symbol %in% highlight_genes) + 1
+      rows_to_hl <- which(sheet_data$gene_symbol %in% highlight_genes) + 1
     }
-
     if (!is.null(highlight_expr)) {
-      expr_rows <- which(sheet_data[, eval(parse(text = highlight_expr))]) + 1
-      rows_to_highlight <- unique(c(rows_to_highlight, expr_rows))
+      try({
+        expr_rows <- which(sheet_data[, eval(parse(text = highlight_expr))]) + 1
+        rows_to_hl <- unique(c(rows_to_hl, expr_rows))
+      }, silent = TRUE)
     }
-
-    if (length(rows_to_highlight) > 0) {
-      for (row in rows_to_highlight) {
-        openxlsx::addStyle(
-          wb,
-          sheet = sheet_name,
-          style = highlight_style,
-          rows = row,
-          cols = 1:ncol(sheet_data),
-          gridExpand = TRUE
-        )
-      }
+    if (length(rows_to_hl) > 0) {
+      openxlsx::addStyle(wb, sheet = sheet_name, style = highlight_style, rows = rows_to_hl, cols = 1:ncol(sheet_data), gridExpand = TRUE)
     }
-
-    # Auto-size columns
-    openxlsx::setColWidths(
-      wb,
-      sheet = sheet_name,
-      cols = 1:ncol(sheet_data),
-      widths = "auto"
-    )
-
-    # Freeze header row
-    openxlsx::freezePane(
-      wb,
-      sheet = sheet_name,
-      firstActiveRow = 2
-    )
+    
+    openxlsx::setColWidths(wb, sheet = sheet_name, cols = 1:ncol(sheet_data), widths = "auto")
+    openxlsx::freezePane(wb, sheet = sheet_name, firstActiveRow = 2)
   }
-
   return(wb)
-} 
+}

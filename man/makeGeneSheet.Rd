@@ -15,6 +15,7 @@ makeGeneSheet(
   split_by = c("none", "chromosome", "criteria"),
   split_criteria = NULL,
   include_supplementary = TRUE,
+  collapse_multiples = TRUE,
   project_dir = "."
 )
 }
@@ -39,6 +40,11 @@ makeGeneSheet(
 
 \item{include_supplementary}{Logical or character vector: TRUE to include all supplementary tables,
 FALSE for none, or character vector of specific table names to include}
+
+\item{collapse_multiples}{Logical: when merging supplementary tables,
+collapse multiple matches per key into a single row by aggregating
+values (e.g. concatenating text). If FALSE, keep all matches as
+separate rows.}
 
 \item{project_dir}{Character: Path to project directory containing .locusPackRat}
 }

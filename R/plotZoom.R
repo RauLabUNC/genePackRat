@@ -1,402 +1,727 @@
-#' Generate LocusZoom Plot from locusPackRat Project
-#'
 #' Creates a LocusZoom-style visualization plot from project data
 #'
-#' @param region_id Character: ID of the region to plot (NULL for first region or gene-based region)
-#' @param project_dir Character: Path to locusPackRat project directory
-#' @param scan_table Character: Name of supplementary table containing scan/QTL data
-#' @param scan_object List: A raw scan object (e.g. scan_ctrl) to use instead of loading a table file
-#' @param threshold Numeric: A specific significance threshold value (e.g. threshold_ctrl)
-#' @param highlight_genes Character vector: Gene symbols to highlight in the plot
-#' @param highlight_selection Character: Expression to select genes to highlight
-#' @param priority_table Character: Name of supplementary table containing gene priorities/scores
-#' @param signal_tables Character vector: Names of supplementary tables to plot as signal tracks
-#' @param show_founders Logical: Whether to plot founder strain effects/haplotypes
-#' @param founder_table Character: Name of supplementary table containing founder data
-#' @param output_file Character: Path for output PDF (auto-generated if NULL)
-#' @param assembly Assembly object for plotgardener (auto-detected from project if NULL)
-#' @param layout Character: Page layout "landscape" (default) or "portrait"
-#' @param plot_params List of plot parameters (uses defaults based on layout if NULL)
+#' Generates a multi-panel locus plot (Manhattan/scan track, optional signal
+#' track, and gene track) for a single region in a locusPackRat project.
 #'
-#' @return Invisible TRUE on success
+#' @param region_id Character: ID of the region to plot. If \code{NULL},
+#'   the first region in \code{regions.csv} is used.
+#' @param project_dir Character: Path to the locusPackRat project directory
+#'   containing the \code{.locusPackRat} folder.
+#' @param assembly Plotgardener assembly object. If \code{NULL}, an assembly
+#'   is constructed automatically based on the project \code{genome} in
+#'   \code{config.json}.
+#' @param scan_table Character: Name of the supplementary table (without
+#'   \code{.csv}) containing scan/QTL data to use for the Manhattan track.
+#' @param signal_table Character (optional): Name of the supplementary table
+#'   (without \code{.csv}) to plot as a signal track below the Manhattan plot
+#'   (e.g. founder effects, other scores). If \code{NULL}, the signal panel
+#'   is skipped.
+#' @param width Numeric: Width of the output PDF in inches.
+#' @param height Numeric: Height of the output PDF in inches.
+#' @param layout_ratios Named numeric vector giving the relative heights of
+#'   the panels, typically \code{c(manhattan = ..., signal = ..., genes = ...)}.
+#'   Values are rescaled internally to fill the available page height.
+#' @param highlight_genes Character vector of gene symbols to highlight in
+#'   the gene track (optional).
+#' @param threshold Numeric: LOD significance threshold used to draw the
+#'   horizontal line on the Manhattan plot (e.g. 5 for a 5-LOD threshold).
+#' @param output_file Character: File path for the output PDF. Defaults to
+#'   \code{"locus_zoom.pdf"} in the current working directory.
+#' @return Invisible \code{TRUE} on success (the plot is written to disk).
 #'
-#' @importFrom data.table fread fwrite setDT setnames as.data.table
+#' @importFrom data.table fread fwrite setDT setnames as.data.table setorderv copy
 #' @importFrom jsonlite read_json
-#' @importFrom plotgardener pageCreate plotManhattan plotGenes plotRanges plotText plotSignal annoYaxis annoHighlight plotGenomeLabel
+#' @importFrom grDevices pdf dev.off
+#' @importFrom plotgardener pageCreate plotManhattan plotGenes plotRanges plotText plotSignal annoYaxis annoHighlight
+#'
+#' @examples
+#' \dontrun{
+#' # Minimal example: Manhattan + genes
+#' generateLocusZoomPlot(
+#'   region_id   = "EF21_Iso_Peak_Zoom",
+#'   project_dir = "EF21_Iso_Analysis",
+#'   scan_table  = "full_iso_scan",
+#'   output_file = "basictest.pdf"
+#' )
+#'
+#' # Full example: with founder effects, custom layout, and highlights
+#' generateLocusZoomPlot(
+#'   region_id    = "EF21_Iso_Peak_Zoom",
+#'   project_dir  = "EF21_Iso_Analysis",
+#'   scan_table   = "full_iso_scan",
+#'   signal_table = "full_iso_founders",
+#'   width        = 10,
+#'   height       = 6,
+#'   layout_ratios = c(manhattan = 0.35, signal = 0.40, genes = 0.25),
+#'   highlight_genes = c("Tspan5", "Stpg2"),
+#'   threshold       = 3.1,
+#'   text_scale      = 1.2,
+#'   font_family     = "Helvetica",
+#'   output_file     = "locus_zoom_region3_full.pdf"
+#' )
+#' }
 #'
 #' @export
 generateLocusZoomPlot <- function(
-  region_id = NULL,
-  project_dir = ".",
-  scan_table = NULL,
-  scan_object = NULL,
-  threshold = NULL,
-  highlight_genes = NULL,
-  highlight_selection = NULL,
-  priority_table = NULL,
-  signal_tables = NULL,
-  show_founders = FALSE,
-  founder_table = "founder_haplotypes",
-  output_file = NULL,
-  assembly = NULL,
-  layout = "landscape",
-  plot_params = NULL
+    region_id = NULL,
+    project_dir = ".",
+    assembly = NULL,
+    # Data Sources
+    scan_table = NULL,
+    signal_table = NULL,
+    # Aesthetics / layout
+    width = 6,
+    height = 4,
+    layout_ratios = c(manhattan = 0.4, signal = 0.3, genes = 0.3),
+    highlight_genes = NULL,
+    threshold = 5,
+    output_file = "locus_zoom.pdf",
+    text_scale = NULL,
+    font_family = NULL
 ) {
-
-  # Check required packages
-  if (!requireNamespace("plotgardener", quietly = TRUE)) {
-    stop("Package 'plotgardener' is required for plotting.")
-  }
-
-  # Define color palettes
-  STRAIN_COLORS <- c(
-    "#1B9E77", "#D95F02", "#7570B3", "#E7298A",
-    "#66A61E", "#E6AB02", "#A6761D", "#666666"
-  )
-  GENE_HIGHLIGHT_COLOR <- "#e34a33"
-  GENE_BACKGROUND_COLOR <- "#fdbb84"
-  LOCI_COLORS <- c("#8DD3C7", "#FFFFB3", "#BEBADA", "#FB8072", "#80B1D3", "#FDB462", "#B3DE69", "#FCCDE5")
-
-  # Set default plot parameters
-  if (is.null(plot_params)) {
-    if (layout == "portrait") {
-      plot_params <- list(page_width = 8.5, page_height = 11, x = 4.25, plot_width = 7.5, plot_height = 1.5, track_height = 0.8, plot_y = 1.0)
-    } else {
-      plot_params <- list(page_width = 10.5, page_height = 5.5, x = 4.25, plot_width = 8, plot_height = 1, track_height = 0.5, plot_y = 0.5)
-    }
-  }
-
-  # --- Load project configuration ---
-  packrat_dir <- file.path(project_dir, ".locusPackRat")
-  if (!dir.exists(packrat_dir)) stop("No .locusPackRat directory found. Run initPackRat() first.")
-  config <- jsonlite::read_json(file.path(packrat_dir, "config.json"))
-
-  message(sprintf("Generating LocusZoom plot (%s) from %s %s %s project...", layout, config$species, config$genome, config$mode))
-
-  # --- Determine region to plot ---
-  if (config$mode == "region") {
-    regions <- fread(file.path(packrat_dir, "input/regions.csv"))
-    if (!is.null(region_id)) {
-      locus_info <- regions[region_id == region_id]
-      if (nrow(locus_info) == 0) stop("Region ID '", region_id, "' not found")
-    } else {
-      locus_info <- regions[1]
-      region_id <- locus_info$region_id
-    }
-  } else {
-    # Gene mode - create synthetic region
-    all_genes <- fread(file.path(packrat_dir, "input/genes.csv"))
-    all_genes <- all_genes[!is.na(chr) & !is.na(start) & !is.na(end)]
-    if (nrow(all_genes) == 0) stop("No genes with coordinates found")
+    # 1. SETUP & CONFIG LOAD ----------------------------------------------
+    packrat_dir <- file.path(project_dir, ".locusPackRat")
+    if (!dir.exists(packrat_dir)) stop("Project not initialized.")
     
-    chr_counts <- table(all_genes$chr)
-    main_chr <- names(chr_counts)[which.max(chr_counts)]
-    chr_genes <- all_genes[chr == main_chr]
+    config <- jsonlite::read_json(file.path(packrat_dir, "config.json"))
     
-    locus_info <- data.table(
-      region_id = paste0("chr", main_chr, "_all_genes"),
-      chr = main_chr,
-      start = min(chr_genes$start, na.rm = TRUE),
-      end = max(chr_genes$end, na.rm = TRUE)
+    # Load Region info
+    regions <- data.table::fread(file.path(packrat_dir, "input", "regions.csv"))
+    if (is.null(region_id)) region_id <- regions$region_id[1]
+    
+    # IMPORTANT: correct data.table filtering
+    target_region <- regions[regions$region_id == region_id, ]
+    if (nrow(target_region) != 1L) {
+        stop("Expected exactly 1 row for region_id = ", region_id,
+             ", got ", nrow(target_region))
+    }
+    
+    target_chr <- target_region$chr
+    
+    # 1a. TEXT SCALING SETUP ----------------------------------------------
+    # Take 6x4 as "design size" for defaults
+    if (is.null(text_scale)) {
+        base_w <- 6
+        base_h <- 4
+        text_scale <- min(width / base_w, height / base_h)
+    }
+    
+    base_sizes <- list(
+        axis_tick    = 8,
+        axis_label   = 10,
+        panel_label  = 11,
+        gene_label   = 8,
+        genome_label = 8,
+        title        = 12,
+        signal_label = 10
     )
-  }
-
-  # =========================================================================
-  # --- Load / Parse Scan Data ---
-  # =========================================================================
-  scan_data <- NULL
-  threshold_val <- if(!is.null(threshold)) threshold else 5
-
-  # 1. Adapter for Raw Object (List structure provided by user)
-  if (!is.null(scan_object)) {
-    message("  Using provided scan object...")
+    text_sizes <- lapply(base_sizes, `*`, text_scale)
     
-    # Check if it matches the List of 18 structure
-    if (is.list(scan_object) && all(c("LOD", "pos", "chr") %in% names(scan_object))) {
-      
-      # Extract relevant vectors
-      # Handle Position: List usually has Mb, we need bp
-      pos_vec <- if("Mb" %in% names(scan_object$pos)) {
-        scan_object$pos$Mb * 1e6 # Convert Mb to bp
-      } else {
-        scan_object$pos # Assume generic vector or bp
-      }
-      
-      # Create standardized data.table
-      scan_data <- data.table(
-        chr = as.character(scan_object$chr),
-        pos = as.numeric(pos_vec),
-        lod = as.numeric(scan_object$LOD)
-      )
-      
-      # Add p-value if present
-      if ("p.value" %in% names(scan_object)) {
-        scan_data[, p_value := as.numeric(scan_object$p.value)]
-      } else {
-        scan_data[, p_value := 10^(-lod)] # Fallback
-      }
-      
-      # Note: allele.effects are available in this object (scan_object$allele.effects)
-      
-    } else {
-      warning("  Provided scan_object does not match expected structure (List with $LOD, $pos$Mb, $chr). Attempting generic coercion.")
-      scan_data <- as.data.table(scan_object)
-    }
-  } 
-  # 2. Fallback to File Loading
-  else if (!is.null(scan_table)) {
-    scan_file <- file.path(packrat_dir, "supplementary", paste0(scan_table, ".csv"))
-    if (file.exists(scan_file)) {
-      scan_data <- fread(scan_file)
-      message("  Loaded scan data from table: ", scan_table)
-      
-      # Look for threshold in file if not provided in args
-      if (is.null(threshold)) {
-        if ("threshold" %in% names(scan_data)) threshold_val <- unique(scan_data$threshold)[1]
-        else if ("significance_threshold" %in% names(scan_data)) threshold_val <- unique(scan_data$significance_threshold)[1]
-      }
-    } else {
-      warning("Scan table '", scan_table, "' not found")
-    }
-  } else {
-    # 3. Auto-detect (original logic)
-    available_tables <- listPackRatTables(project_dir)
-    scan_tables <- available_tables[grepl("scan|qtl|lod", table_name, ignore.case = TRUE)]
-    if (nrow(scan_tables) > 0) {
-      scan_table <- scan_tables$table_name[1]
-      message("  Auto-detected scan table: ", scan_table)
-      scan_data <- fread(file.path(packrat_dir, "supplementary", paste0(scan_table, ".csv")))
-      if (is.null(threshold) && "threshold" %in% names(scan_data)) threshold_val <- unique(scan_data$threshold)[1]
-    }
-  }
-  
-  # =========================================================================
-
-  # --- Load genes in the region ---
-  genes_file <- file.path(packrat_dir, "input/genes.csv")
-  if (file.exists(genes_file)) {
-    all_genes <- fread(genes_file)
-    genes_in_locus <- all_genes[chr == locus_info$chr & end >= locus_info$start & start <= locus_info$end]
-    message("  Found ", nrow(genes_in_locus), " genes in region")
-  } else {
-    genes_in_locus <- data.table()
-  }
-
-  # --- Determine genes to highlight (Priority / Selection / Manual) ---
-  top_genes_in_locus <- data.table()
-  
-  if (!is.null(highlight_selection) && nrow(genes_in_locus) > 0) {
-     tryCatch({
-      top_genes_in_locus <- genes_in_locus[eval(parse(text = highlight_selection))]
-      message(sprintf("  Highlighting %d genes based on selection: %s", nrow(top_genes_in_locus), highlight_selection))
-    }, error = function(e) warning("Failed to evaluate highlight_selection: ", e$message))
-  } else if (!is.null(priority_table)) {
-    priority_file <- file.path(packrat_dir, "supplementary", paste0(priority_table, ".csv"))
-    if (file.exists(priority_file)) {
-      priority_data <- fread(priority_file)
-      if ("gene_symbol" %in% names(priority_data) && nrow(genes_in_locus) > 0) {
-        genes_in_locus <- merge(genes_in_locus, priority_data, by = "gene_symbol", all.x = TRUE)
-        score_cols <- names(priority_data)[grepl("score|priority|rank", names(priority_data), ignore.case = TRUE)]
-        if (length(score_cols) > 0) {
-          setorderv(genes_in_locus, score_cols[1], order = -1)
-          top_genes_in_locus <- genes_in_locus[1:min(10, .N)]
+    # 1b. DETERMINE ASSEMBLY ----------------------------------------------
+    if (is.null(assembly)) {
+        if (config$genome == "mm39") {
+            req_tx <- "TxDb.Mmusculus.UCSC.mm39.knownGene"
+            req_org <- "org.Mm.eg.db"
+            genome_build <- "mm39"
+        } else if (config$genome == "hg38") {
+            req_tx <- "TxDb.Hsapiens.UCSC.hg38.knownGene"
+            req_org <- "org.Hs.eg.db"
+            genome_build <- "hg38"
+        } else if (config$genome == "mm10") {
+            req_tx <- "TxDb.Mmusculus.UCSC.mm10.knownGene"
+            req_org <- "org.Mm.eg.db"
+            genome_build <- "mm10"
+        } else if (config$genome == "hg19") {
+            req_tx <- "TxDb.Hsapiens.UCSC.hg19.knownGene"
+            req_org <- "org.Hs.eg.db"
+            genome_build <- "hg19"
+        } else {
+            stop("Unsupported genome in config: ", config$genome)
         }
-      }
-    }
-  } else if (!is.null(highlight_genes)) {
-    top_genes_in_locus <- genes_in_locus[gene_symbol %in% highlight_genes]
-  } else if (nrow(genes_in_locus) > 0) {
-    top_genes_in_locus <- genes_in_locus[1:min(10, .N)]
-  }
-
-  gene_highlights <- if (nrow(top_genes_in_locus) > 0) data.table(gene = top_genes_in_locus$gene_symbol, color = GENE_HIGHLIGHT_COLOR) else NULL
-
-  # --- Overlapping regions ---
-  overlapping_loci <- data.table()
-  if (config$mode == "region" && exists("regions")) {
-    overlapping_loci <- regions[chr == locus_info$chr & start <= locus_info$end & end >= locus_info$start & region_id != locus_info$region_id]
-  }
-
-# --- Set up genome assembly ---
-  if (is.null(assembly)) {
-    
-    # 1. Define the requirements for each genome
-    if (config$genome == "mm39") {
-      req_tx <- "TxDb.Mmusculus.UCSC.mm39.knownGene"
-      req_org <- "org.Mm.eg.db"
-      genome_build <- "mm39"
-    } else if (config$genome == "hg38") {
-      req_tx <- "TxDb.Hsapiens.UCSC.hg38.knownGene"
-      req_org <- "org.Hs.eg.db"
-      genome_build <- "hg38"
-    } else if (config$genome == "mm10") {
-      req_tx <- "TxDb.Mmusculus.UCSC.mm10.knownGene"
-      req_org <- "org.Mm.eg.db"
-      genome_build <- "mm10"
-    } else if (config$genome == "hg19") {
-      req_tx <- "TxDb.Hsapiens.UCSC.hg19.knownGene"
-      req_org <- "org.Hs.eg.db"
-      genome_build <- "hg19"
-    } else {
-      stop("Unsupported genome in config: ", config$genome)
-    }
-
-    # check required packages are installed to see gene tracts
-    missing_pkgs <- character()
-    if (!requireNamespace(req_tx, quietly = TRUE)) missing_pkgs <- c(missing_pkgs, req_tx)
-    if (!requireNamespace(req_org, quietly = TRUE)) missing_pkgs <- c(missing_pkgs, req_org)
-
-    if (length(missing_pkgs) > 0) {
-      install_cmd <- paste0("BiocManager::install(c('", paste(missing_pkgs, collapse = "', '"), "'))")
-      stop("To plot genes for ", config$genome, ", you must install the following annotation package(s): ", 
-           paste(missing_pkgs, collapse = ", "),
-           "\nRun this command: ", install_cmd)
-    }
-    # 3. Create the assembly (Now we know packages are safe)
-    assembly <- plotgardener::assembly(
-      Genome = genome_build,
-      TxDb = req_tx,
-      OrgDb = req_org
-    )
-  }
-
-  # --- Output File Setup ---
-  if (is.null(output_file)) {
-    output_dir <- file.path(packrat_dir, "output/plots")
-    dir.create(output_dir, showWarnings = FALSE, recursive = TRUE)
-    suffix <- if(layout == "portrait") "_portrait" else ""
-    plot_name <- if (!is.null(region_id)) paste0("locuszoom_", region_id, suffix, ".pdf") else paste0("locuszoom_chr", locus_info$chr, suffix, ".pdf")
-    output_file <- file.path(output_dir, plot_name)
-  }
-
-  # ================= PLOTTING =================
-  message("Creating plot: ", output_file)
-  plot_start_bp <- max(0, locus_info$start - 5e5)
-  plot_end_bp <- locus_info$end + 5e5
-  bounds_bp <- c(locus_info$start, locus_info$end)
-
-  pdf(output_file, width = plot_params$page_width, height = plot_params$page_height)
-  plotgardener::pageCreate(width = plot_params$page_width, height = plot_params$page_height, default.units = "inches", showGuides = FALSE)
-  params_genome <- plotgardener::pgParams(assembly = assembly, chrom = paste0("chr", locus_info$chr), chromstart = plot_start_bp, chromend = plot_end_bp)
-  current_y <- plot_params$plot_y
-
-  # 1. Manhattan Plot (using prepared scan_data)
-  if (!is.null(scan_data) && nrow(scan_data) > 0) {
-    plot_data <- copy(scan_data)
-    if ("chromosome" %in% names(plot_data)) setnames(plot_data, "chromosome", "chr")
-    if ("position" %in% names(plot_data)) setnames(plot_data, "position", "pos")
-    
-    # Ensure chromosome format matches params_genome
-    if (!grepl("^chr", as.character(plot_data$chr[1]))) plot_data[, chrom := paste0("chr", plot_data$chr)] else plot_data[, chrom := chr]
-    plot_data <- plot_data[chrom == paste0("chr", locus_info$chr)]
-
-    if ("lod" %in% names(plot_data)) plot_data[, p := 10^(-lod)] else if ("p_value" %in% names(plot_data)) setnames(plot_data, "p_value", "p")
-    
-    # Plotting
-    ylim <- c(0, max(-log10(plot_data$p), -log10(10^(-threshold_val)), 5, na.rm = TRUE) + 1)
-    miqtl_plot <- plotgardener::plotManhattan(
-      data = plot_data, params = params_genome, range = ylim, trans = "-log10",
-      sigVal = 10^(-threshold_val), x = plot_params$x, y = current_y,
-      width = plot_params$plot_width, height = plot_params$plot_height, just = c("center", "top"),
-      fill = "#a6cee3", sigCol = "#1f78b4", sigLine = TRUE, baseline = TRUE, default.units = "inches"
-    )
-    plotgardener::annoYaxis(plot = miqtl_plot, at = pretty(ylim), axisLine = TRUE, fontsize = 8)
-    plotgardener::plotText(label = "LOD Score", x = plot_params$x - plot_params$plot_width/2 - 0.3, y = current_y + plot_params$plot_height / 2, rot = 90, fontsize = 8, just = "center", default.units = "inches")
-    
-    # Highlight region
-    plotgardener::annoHighlight(
-      plot = miqtl_plot, chrom = paste0("chr", locus_info$chr),
-      chromstart = floor(min(bounds_bp)), chromend = ceiling(max(bounds_bp)),
-      fill = "#fb9a99", y = current_y, height = plot_params$plot_height,
-      just = c("left", "top"), default.units = "inches", alpha = 0.2, params = params_genome
-    )
-    current_y <- current_y + plot_params$plot_height + 0.2
-  }
-
-  # 2. Signal Tracks
-  if (!is.null(signal_tables)) {
-    for (sig_name in signal_tables) {
-      sig_file <- file.path(packrat_dir, "supplementary", paste0(sig_name, ".csv"))
-      if (file.exists(sig_file)) {
-        sig_data <- fread(sig_file)
-        if (!"chrom" %in% names(sig_data) && "chr" %in% names(sig_data)) setnames(sig_data, "chr", "chrom")
-        if (!grepl("^chr", as.character(sig_data$chrom[1]))) sig_data[, chrom := paste0("chr", chrom)]
-        score_col <- intersect(names(sig_data), c("score", "value", "lod", "intensity"))[1]
-        if (!is.na(score_col)) setnames(sig_data, score_col, "score")
         
-        if ("score" %in% names(sig_data)) {
-          message("  Adding signal track: ", sig_name)
-          plotgardener::plotSignal(
-            data = sig_data, params = params_genome, x = plot_params$x, y = current_y,
-            width = plot_params$plot_width, height = plot_params$track_height, just = c("center", "top"),
-            linecolor = "#377eb8", fill = "#377eb8", default.units = "inches"
-          )
-          plotgardener::plotText(label = sig_name, x = plot_params$x - plot_params$plot_width/2 - 0.3, y = current_y + plot_params$track_height / 2, rot = 90, fontsize = 8, just = "center", default.units = "inches")
-          current_y <- current_y + plot_params$track_height + 0.1
+        missing_pkgs <- character()
+        if (!requireNamespace(req_tx, quietly = TRUE))  missing_pkgs <- c(missing_pkgs, req_tx)
+        if (!requireNamespace(req_org, quietly = TRUE)) missing_pkgs <- c(missing_pkgs, req_org)
+        if (length(missing_pkgs) > 0) {
+            install_cmd <- paste0(
+                "BiocManager::install(c('",
+                paste(missing_pkgs, collapse = "', '"),
+                "'))"
+            )
+            stop(
+                "To plot genes for ", config$genome,
+                ", you must install the following annotation package(s): ",
+                paste(missing_pkgs, collapse = ", "),
+                "\nRun this command: ", install_cmd
+            )
         }
-      }
-    }
-  }
-
-  # 3. Founder Effects
-  if (show_founders) {
-    founder_file <- file.path(packrat_dir, "supplementary", paste0(founder_table, ".csv"))
-    if (file.exists(founder_file)) {
-      founder_data <- fread(founder_file)
-      strain_col <- intersect(names(founder_data), c("strain", "founder", "genotype"))[1]
-      if (!is.na(strain_col)) {
-        message("  Adding founder track: ", founder_table)
-        setnames(founder_data, strain_col, "strain_id")
-        if ("chr" %in% names(founder_data)) setnames(founder_data, "chr", "chrom")
-        if (!grepl("^chr", as.character(founder_data$chrom[1]))) founder_data[, chrom := paste0("chr", chrom)]
         
-        strain_names <- c("A/J", "C57BL/6J", "129S1/SvImJ", "NOD/ShiLtJ", "NZO/HILtJ", "CAST/EiJ", "PWK/PhJ", "WSB/EiJ")
-        mapped_colors <- STRAIN_COLORS; names(mapped_colors) <- strain_names
-        founder_data[, color := "#999999"]
-        for (sn in strain_names) founder_data[grepl(sn, strain_id, fixed = TRUE), color := mapped_colors[sn]]
-        
-        plotgardener::plotRanges(
-          data = founder_data, params = params_genome, fill = founder_data$color, linecolor = NA,
-          x = plot_params$x, y = current_y, width = plot_params$plot_width, height = plot_params$track_height, just = c("center", "top"), default.units = "inches"
+        assembly <- plotgardener::assembly(
+            Genome = genome_build,
+            TxDb   = req_tx,
+            OrgDb  = req_org
         )
-        plotgardener::plotText(label = "Founders", x = plot_params$x - plot_params$plot_width/2 - 0.3, y = current_y + plot_params$track_height / 2, rot = 90, fontsize = 8, just = "center", default.units = "inches")
-        current_y <- current_y + plot_params$track_height + 0.2
-      }
     }
-  }
-
-  # 4. Overlapping Regions
-  if (nrow(overlapping_loci) > 1) {
-    loci_palette <- function(n) if (n <= length(LOCI_COLORS)) LOCI_COLORS[1:n] else grDevices::colorRampPalette(LOCI_COLORS)(n)
-    plotgardener::plotRanges(
-      data = overlapping_loci, params = params_genome, fill = plotgardener::colorby("region_id", palette = loci_palette),
-      x = plot_params$x, y = current_y, width = plot_params$plot_width, height = 0.5, just = c("center", "top"), default.units = "inches"
+    
+    # 1c. PAGE, MARGINS, AND LAYOUT ---------------------------------------
+    grDevices::pdf(output_file, width = width, height = height)
+    plotgardener::pageCreate(
+        width = width,
+        height = height,
+        default.units = "inches",
+        showGuides = FALSE
     )
-    plotgardener::plotText(label = "Overlapping Regions", x = plot_params$x - plot_params$plot_width/2 - 0.3, y = current_y + 0.25, rot = 90, fontsize = 8, just = "center", default.units = "inches")
-    current_y <- current_y + 0.7
-  }
-
-  # 5. Genes
-  gene_order <- if(nrow(top_genes_in_locus) > 0) top_genes_in_locus$gene_symbol else NULL
-  tryCatch({
-    plotgardener::plotGenes(
-      params = params_genome, x = plot_params$x, y = current_y, width = plot_params$plot_width, height = 1,
-      just = c("center", "top"), default.units = "inches", geneOrder = gene_order, fontsize = 6,
-      geneHighlights = gene_highlights, geneBackground = GENE_BACKGROUND_COLOR
+    
+    # Margins and gaps as FRACTIONS of the page
+    margin_left_frac   <- 0.12
+    margin_right_frac  <- 0.06
+    margin_top_frac    <- 0.08
+    margin_bottom_frac <- 0.10
+    gap_frac           <- 0.04   # between panels
+    genome_label_frac  <- 0.06   # space reserved under gene panel
+    
+    margin_left   <- width  * margin_left_frac
+    margin_right  <- width  * margin_right_frac
+    margin_top    <- height * margin_top_frac
+    margin_bottom <- height * margin_bottom_frac
+    panel_gap     <- height * gap_frac
+    genome_extra  <- height * genome_label_frac
+    
+    plot_width <- width - (margin_left + margin_right)
+    plot_height <- height - (margin_top + margin_bottom + genome_extra + 2 * panel_gap)
+    
+    if (plot_width <= 0 || plot_height <= 0) {
+        grDevices::dev.off()
+        stop("Non-positive plotting area; reduce margins or increase width/height.")
+    }
+    
+    # 1d. pgParams for the region -----------------------------------------
+    pg_params <- plotgardener::pgParams(
+        assembly   = assembly,
+        chrom      = target_chr,
+        chromstart = as.numeric(target_region$start),
+        chromend   = as.numeric(target_region$end)
     )
-  }, error = function(e) {
-    message("Note: Gene highlighting failed, plotting without highlights")
-    plotgardener::plotGenes(params = params_genome, x = plot_params$x, y = current_y, width = plot_params$plot_width, height = 1, just = c("center", "top"), default.units = "inches", fontsize = 6)
-  })
-
-  plotgardener::plotGenomeLabel(params = params_genome, x = plot_params$x, y = current_y + 1.1, length = plot_params$plot_width, just = c("center", "top"), default.units = "inches")
-  
-  title_text <- if (!is.null(region_id)) paste0("LocusZoom Plot: ", region_id) else paste0("LocusZoom Plot: Chr", locus_info$chr, ":", round(locus_info$start/1e6, 1), "-", round(locus_info$end/1e6, 1), " Mb")
-  plotgardener::plotText(label = title_text, x = plot_params$page_width / 2, y = 0.3, fontsize = 12, fontface = "bold", just = "center", default.units = "inches")
-  plotgardener::plotText(label = paste0(config$species, " ", config$genome, " | ", config$mode, " mode"), x = plot_params$page_width / 2, y = 0.5, fontsize = 10, just = "center", default.units = "inches")
-
-  dev.off()
-  message("Plot saved to: ", output_file)
-  invisible(TRUE)
+    
+    # 2. DATA LOADING ------------------------------------------------------
+    if (is.null(scan_table))
+        stop("Must provide a scan_table name")
+    
+    scan_path <- file.path(packrat_dir, "supplementary", paste0(scan_table, ".csv"))
+    if (!file.exists(scan_path))
+        stop("Scan table not found: ", scan_path)
+    
+    scan_dt <- data.table::fread(scan_path)
+    
+    # Signal table is truly optional
+    signal_dt <- NULL
+    if (!is.null(signal_table)) {
+        signal_path <- file.path(packrat_dir, "supplementary", paste0(signal_table, ".csv"))
+        if (!file.exists(signal_path)) {
+            grDevices::dev.off()
+            stop("Signal table not found: ", signal_path)
+        }
+        signal_dt <- data.table::fread(signal_path)
+    }
+    
+    # Genes / highlights
+    gene_list_vector <- NULL
+    if (config$mode == "region") {
+        if ("genes" %in% names(target_region) && !is.na(target_region$genes)) {
+            raw_genes <- strsplit(as.character(target_region$genes), ",")[[1]]
+            gene_list_vector <- trimws(raw_genes)
+        }
+    } else {
+        gene_file <- file.path(packrat_dir, "input", "genes.csv")
+        if (file.exists(gene_file)) {
+            gene_dt <- data.table::fread(gene_file)
+            gene_list_vector <- gene_dt$gene_symbol
+        }
+    }
+    
+    hl_df <- NULL
+    if (!is.null(highlight_genes)) {
+        hl_df <- data.frame(gene = highlight_genes, color = "#a03b60")
+    }
+    
+    # 3. PANEL HEIGHTS (normalize ratios over drawn panels) ----------------
+    # We always draw manhattan + genes; signals only if we have data rows.
+    has_signal_data <- !is.null(signal_dt) && nrow(signal_dt) > 0
+    
+    active_panels <- c("manhattan", if (has_signal_data) "signal", "genes")
+    ratios <- layout_ratios[active_panels]
+    if (any(is.na(ratios))) {
+        grDevices::dev.off()
+        stop("layout_ratios must have named entries for: ",
+             paste(active_panels, collapse = ", "))
+    }
+    ratios <- ratios / sum(ratios)
+    
+    h_manhattan <- plot_height * ratios["manhattan"]
+    h_genes     <- plot_height * ratios["genes"]
+    h_signals   <- if (has_signal_data) plot_height * ratios["signal"] else 0
+    
+    # 4. RENDER MODULES ----------------------------------------------------
+    current_y <- margin_top
+    
+    # A. Manhattan / scan
+    current_y <- .render_manhattan(
+        scan_data   = scan_dt,
+        params      = pg_params,
+        x           = margin_left,
+        y           = current_y,
+        w           = plot_width,
+        h           = h_manhattan,
+        threshold   = threshold,
+        text_sizes  = text_sizes,
+        font_family = font_family
+    )
+    current_y <- current_y + panel_gap
+    
+    # B. Signals (if available)
+    if (has_signal_data && h_signals > 0) {
+        new_y <- .render_signals(
+            signal_dt  = signal_dt,
+            params     = pg_params,
+            x          = margin_left,
+            y          = current_y,
+            w          = plot_width,
+            h          = h_signals,
+            text_sizes = text_sizes,
+            font_family = font_family
+        )
+        # Only add gap if something was actually drawn
+        if (new_y > current_y) {
+            current_y <- new_y + panel_gap
+        }
+    }
+    
+    # C. Genes + genome label
+    current_y <- .render_genes(
+        gene_list    = gene_list_vector,
+        highlights   = hl_df,
+        params       = pg_params,
+        x            = margin_left,
+        y            = current_y,
+        w            = plot_width,
+        h            = h_genes,
+        genome_extra = genome_extra,
+        text_sizes   = text_sizes,
+        font_family  = font_family
+    )
+    
+    grDevices::dev.off()
+    message("Plot saved to ", output_file)
+    invisible(TRUE)
 }
 
+.quiet_pg <- function(expr) {
+  capture.output(
+    res <- suppressMessages(expr),
+    file = NULL
+  )
+  res
+}
+
+#' Internal module to render Genes
+#' @noRd
+.render_genes <- function(gene_list, highlights, params, x, y, w, h) {
+  
+  # Determine labeling priority:
+  # 1. Highlighted genes (if any)
+  # 2. Genes listed in the region (if available)
+  # 3. Plotgardener defaults
+  
+  gene_order <- NULL
+  
+  if (!is.null(highlights)) {
+    # Start with highlights
+    gene_order <- highlights$gene
+    
+    # Append the rest of the known genes in the region (if we have them)
+    if (!is.null(gene_list)) {
+      remaining <- setdiff(gene_list, highlights$gene)
+      gene_order <- c(gene_order, remaining)
+    }
+  } else if (!is.null(gene_list)) {
+    # No highlights, just use the region list order
+    gene_order <- gene_list
+  }
+  
+  # Add "chr" prefix if needed
+  params$chrom <- if (grepl("^chr", params$chrom)) {
+    params$chrom
+  } else {
+    paste0("chr", params$chrom)
+  }
+  # Plot Genes
+  # plotgardener pulls coordinates from the 'assembly' in params,
+  # so we don't need to pass a dataframe of coordinates here.
+  plt <- plotgardener::plotGenes(
+    params = params,
+    x = x, y = y, width = w, height = h,
+    just = c("left", "top"),
+    geneOrder = gene_order,
+    geneHighlights = highlights,
+    geneBackground = "grey",
+    fontsize = 8,
+    default.units = "inches"
+  )
+  
+  # Add Genome Label below genes
+  plotgardener::annoGenomeLabel(
+    plot = plt, x = x, y = y + h + 0.2,
+    scale = "Mb", just = c("left", "top"),
+    default.units = "inches"
+  )
+  
+  return(y + h + 0.5)
+}
+
+.render_manhattan <- function(
+    scan_data,
+    params,
+    x, y, w, h,
+    threshold,
+    text_sizes,
+    font_family = NULL
+) {
+    # Empty?
+    if (is.null(scan_data) || nrow(scan_data) == 0) return(y)
+    
+    # Standardize columns
+    if (!"chrom" %in% names(scan_data) && "chr" %in% names(scan_data)) {
+        scan_data[, chrom := as.character(chr)]
+    }
+    if (!"pos" %in% names(scan_data)) {
+        if ("start" %in% names(scan_data))      scan_data[, pos := start]
+        else if ("bp" %in% names(scan_data))    scan_data[, pos := bp]
+    }
+    if ("lod" %in% names(scan_data) && !"p" %in% names(scan_data)) {
+        scan_data[, p := 10^(-lod)]
+    }
+    
+    # Validate required
+    required <- c("chrom", "pos", "p")
+    missing  <- setdiff(required, names(scan_data))
+    if (length(missing)) {
+        warning("scan_data is missing required columns: ",
+                paste(missing, collapse = ", "),
+                "; skipping Manhattan panel.")
+        return(y)
+    }
+    
+    # Filter for chromosome
+    if (isTRUE(!is.na(params$chrom))) {
+        scan_data <- scan_data[chrom == params$chrom]
+    }
+    if (nrow(scan_data) == 0) return(y)
+    
+    max_y <- max(c(-log10(scan_data$p), threshold, 5), na.rm = TRUE) + 1
+    ylim <- c(0, max_y)
+    
+    plt <- plotgardener::plotManhattan(
+        data    = scan_data,
+        params  = params,
+        range   = ylim,
+        trans   = "-log10",
+        sigVal  = 10^(-threshold),
+        x       = x,
+        y       = y,
+        width   = w,
+        height  = h,
+        just    = c("left", "top"),
+        fill    = "#a1c6d1",
+        sigCol  = "#53add2",
+        sigLine = TRUE,
+        baseline = TRUE,
+        default.units = "inches"
+    )
+    
+    # Y axis with scaled tick text
+    if (requireNamespace("grid", quietly = TRUE)) {
+        gp_args <- list(fontsize = text_sizes$axis_tick)
+        if (!is.null(font_family)) gp_args$fontfamily <- font_family
+        
+        do.call(
+            plotgardener::annoYaxis,
+            c(
+                list(
+                    plot     = plt,
+                    at       = pretty(ylim),
+                    axisLine = TRUE
+                ),
+                gp_args
+            )
+        )
+    } else {
+        plotgardener::annoYaxis(
+            plot     = plt,
+            at       = pretty(ylim),
+            axisLine = TRUE
+        )
+    }
+    
+    # Axis label ("LOD"), size-aware and offset as fraction of width
+    axis_offset <- w * 0.06
+    plotgardener::plotText(
+        label  = "LOD",
+        x      = x - axis_offset,
+        y      = y + (h / 2),
+        rot    = 90,
+        fontsize = text_sizes$axis_label,
+        just   = "center",
+        default.units = "inches",
+        fontfamily = font_family
+    )
+    
+    y + h
+}
+
+.render_signals <- function(
+    signal_dt,
+    params,
+    x, y, w, h,
+    text_sizes,
+    font_family = NULL
+) {
+    if (is.null(signal_dt) || nrow(signal_dt) == 0) return(y)
+    
+    target_chrom <- params$chrom
+    
+    if (!"chrom" %in% colnames(signal_dt) && "chr" %in% colnames(signal_dt)) {
+        signal_dt[, chrom := as.character(chr)]
+    }
+    if (!"start" %in% colnames(signal_dt)) {
+        warning("signal_dt must include 'start' column; skipping signal panel.")
+        return(y)
+    }
+    
+    # Filter by chromosome
+    if (isTRUE(!is.na(target_chrom))) {
+        signal_dt <- signal_dt[chrom == target_chrom]
+    }
+    if (nrow(signal_dt) == 0) return(y)
+    
+    data.table::setorderv(signal_dt, "start")
+    signal_dt[, end := data.table::shift(start, type = "lead", fill = start[.N] + 2) - 1]
+    
+    founder_cols <- c("A", "B", "C", "D", "E", "F", "G", "H")
+    is_founder_data <- all(founder_cols %in% colnames(signal_dt))
+    
+    if (is_founder_data) {
+        strain_colors <- c(
+            "A" = "#1B9E77", "B" = "#D95F02", "C" = "#7570B3", "D" = "#E7298A",
+            "E" = "#66A61E", "F" = "#E6AB02", "G" = "#A6761D", "H" = "#666666"
+        )
+        
+        all_vals <- as.vector(as.matrix(signal_dt[, ..founder_cols]))
+        max_eff <- round(max(abs(all_vals), na.rm = TRUE) * 1.1, digits = 0)
+        if (!is.finite(max_eff) || max_eff == 0) {
+            return(y)  # nothing meaningful to plot
+        }
+        sig_range <- c(-max_eff, max_eff)
+        
+        first_plot <- NULL
+        for (strain_let in founder_cols) {
+            sub_dt <- signal_dt[, .(chrom, start, end, score = get(strain_let))]
+            
+            plt <- .quiet_pg(
+                plotgardener::plotSignal(
+                    data    = sub_dt,
+                    params  = params,
+                    range   = sig_range,
+                    negData = TRUE,
+                    linecolor = strain_colors[strain_let],
+                    fill    = NA,
+                    x       = x,
+                    y       = y,
+                    width   = w,
+                    height  = h,
+                    just    = c("left", "top"),
+                    baseline = TRUE,
+                    baseline.color = "grey",
+                    default.units  = "inches"
+                )
+            )
+
+            if (is.null(first_plot)) first_plot <- plt
+        }
+        
+        if (!is.null(first_plot)) {
+            # Y axis
+            if (requireNamespace("grid", quietly = TRUE)) {
+                gp_args <- list(fontsize = text_sizes$axis_tick)
+                if (!is.null(font_family)) gp_args$fontfamily <- font_family
+                
+                do.call(
+                    plotgardener::annoYaxis,
+                    c(
+                        list(
+                            plot     = first_plot,
+                            at       = c(-max_eff, 0, max_eff),
+                            axisLine = TRUE
+                        ),
+                        gp_args
+                    )
+                )
+            } else {
+                plotgardener::annoYaxis(
+                    plot     = first_plot,
+                    at       = c(-max_eff, 0, max_eff),
+                    axisLine = TRUE
+                )
+            }
+        }
+        
+        # Side label
+        axis_offset <- w * 0.08
+        plotgardener::plotText(
+            label   = "Founder Effects",
+            x       = x - axis_offset,
+            y       = y + (h / 2),
+            rot     = 90,
+            fontsize = text_sizes$signal_label,
+            just    = "center",
+            default.units = "inches",
+            fontfamily = font_family
+        )
+        
+    } else {
+        # Standard single signal
+        if (!"score" %in% names(signal_dt)) {
+            val_col <- intersect(names(signal_dt), c("value", "lod", "intensity", "effect"))[1]
+            if (!is.na(val_col)) {
+                signal_dt[, score := get(val_col)]
+            } else {
+                warning("Could not find a value column for signal_dt; skipping signal panel.")
+                return(y)
+            }
+        }
+        
+        max_val <- max(abs(signal_dt$score), na.rm = TRUE)
+        if (!is.finite(max_val) || max_val == 0) return(y)
+        sig_range <- c(-max_val * 1.1, max_val * 1.1)
+        
+        plt <- .quiet_pg(
+        plotgardener::plotSignal(
+            data    = signal_dt,
+            params  = params,
+            range   = sig_range,
+            negData = TRUE,
+            linecolor = "#377eb8",
+            fill    = NA,
+            x       = x,
+            y       = y,
+            width   = w,
+            height  = h,
+            just    = c("left", "top"),
+            baseline = TRUE,
+            baseline.color = "grey",
+            default.units  = "inches"
+        )
+        )
+        
+        # Y axis
+        if (requireNamespace("grid", quietly = TRUE)) {
+            gp_args <- list(fontsize = text_sizes$axis_tick)
+            if (!is.null(font_family)) gp_args$fontfamily <- font_family
+            
+            do.call(
+                plotgardener::annoYaxis,
+                c(
+                    list(
+                        plot     = plt,
+                        at       = pretty(sig_range, n = 3),
+                        axisLine = TRUE
+                    ),
+                    gp_args
+                )
+            )
+        } else {
+            plotgardener::annoYaxis(
+                plot     = plt,
+                at       = pretty(sig_range, n = 3),
+                axisLine = TRUE
+            )
+        }
+        
+        # Panel label on the side (generic)
+        axis_offset <- w * 0.08
+        plotgardener::plotText(
+            label   = "Signal",
+            x       = x - axis_offset,
+            y       = y + (h / 2),
+            rot     = 90,
+            fontsize = text_sizes$signal_label,
+            just    = "center",
+            default.units = "inches",
+            fontfamily = font_family
+        )
+    }
+    
+    y + h
+}
+
+.render_genes <- function(
+    gene_list,
+    highlights,
+    params,
+    x, y, w, h,
+    genome_extra,
+    text_sizes,
+    font_family = NULL
+) {
+    # Gene labeling priority:
+    # 1. highlights
+    # 2. region gene_list
+    gene_order <- NULL
+    if (!is.null(highlights)) {
+        gene_order <- highlights$gene
+        if (!is.null(gene_list)) {
+            remaining <- setdiff(gene_list, highlights$gene)
+            gene_order <- c(gene_order, remaining)
+        }
+    } else if (!is.null(gene_list)) {
+        gene_order <- gene_list
+    }
+    
+    # plotGenes wants chrom with "chr" prefix if annotations are like that
+    params$chrom <- if (grepl("^chr", params$chrom)) params$chrom else paste0("chr", params$chrom)
+    
+    # Gene track
+    plt <- plotgardener::plotGenes(
+        params        = params,
+        x             = x,
+        y             = y,
+        width         = w,
+        height        = h,
+        just          = c("left", "top"),
+        geneOrder     = gene_order,
+        geneHighlights = highlights,
+        geneBackground = "grey",
+        fontsize      = text_sizes$gene_label,
+        default.units = "inches"
+        # font_family is not explicitly supported here; fontcolor
+        # can be customized separately if you want.
+    )
+    
+    # Genome label underneath, scaled
+    .quiet_pg(
+    suppressWarnings(
+        plotgardener::annoGenomeLabel(
+        plot        = plt,
+        x           = x,
+        y           = y + h + (genome_extra * 0.3),
+        scale       = "Mb",
+        fontsize    = text_sizes$genome_label,
+        fontcolor   = "black",
+        just        = c("left", "top"),
+        default.units = "inches"
+        )
+    )
+    )
+
+    
+    y + h + genome_extra
+}

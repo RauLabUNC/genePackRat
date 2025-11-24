@@ -24,11 +24,10 @@ Imports:
     data.table (>= 1.14.0),
     jsonlite (>= 1.8.0),
     openxlsx (>= 4.2.0),
-    dplyr (>= 1.0.0)
+    dplyr (>= 1.0.0),
+    plotgardener
 Suggests:
-    BiocManager,
     tidyr,
-    plotgardener,
     RColorBrewer,
     GenomicRanges,
     GenomeInfoDb,

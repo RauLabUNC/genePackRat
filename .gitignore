@@ -1,12 +1,10 @@
-# Claude development notes and working files
-.claude_notes/
-
 # R package development
 .Rhistory
 .RData
 .Rproj.user/
 *.Rproj
 temp_lib/
+sandbox/
 
 # Package build artifacts
 *.tar.gz

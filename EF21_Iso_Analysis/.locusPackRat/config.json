@@ -15,11 +15,27 @@
   "supplementary_tables": {
     "full_iso_scan": {
       "link_type": "point",
-      "link_by": "auto",
-      "date_added": "2025-11-22",
-      "n_rows": 61,
-      "n_cols": 11,
-      "columns": ["chr", "region_id", "start", "end", "genes", "pos", "p", "lod", "marker", "i.start", "i.end"]
+      "link_by": "pos",
+      "date_added": "2025-11-23",
+      "n_rows": 76586,
+      "n_cols": 7,
+      "columns": [
+        "chr",
+        "pos",
+        "p",
+        "lod",
+        "marker",
+        "start",
+        "end"
+      ]
+    },
+    "full_iso_founders": {
+      "link_type": "point",
+      "link_by": "pos",
+      "date_added": "2025-11-23",
+      "n_rows": 76586,
+      "n_cols": 13,
+      "columns": ["A", "B", "C", "D", "E", "F", "G", "H", "marker", "pos", "chr", "start", "end"]
     }
   }
 }

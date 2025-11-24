@@ -1,5 +1,6 @@
 ^\.locusPackRat$
 ^scripts$
+^sandbox$
 ^temp_lib$
 ^\.git$
 ^figures$
@@ -11,3 +12,7 @@
 ^examples$
 ^environment\.yml$
 ^plotting.R$
+^tests/locusZoom/data$
+^EF21_Iso_Analysis$
+^test_plot_project$
+^EF21_Iso_LocusZoom\.pdf$

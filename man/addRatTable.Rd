@@ -7,7 +7,7 @@
 addRatTable(
   data,
   table_name,
-  link_type = c("gene", "region"),
+  link_type = c("gene", "region", "point"),
   link_by = NULL,
   project_dir = "."
 )
@@ -17,9 +17,10 @@ addRatTable(
 
 \item{table_name}{Character: Name for the output table (without .csv extension)}
 
-\item{link_type}{Character: "gene" or "region" - what to link the data to}
+\item{link_type}{Character: "gene", "region", or "point".
+"point" treats data as genomic positions (SNPs) and maps them to overlapping regions.}
 
-\item{link_by}{Character: Column name in data to use for linking (e.g., "gene_symbol", "ensembl_id", or for regions: "chr,start,end")}
+\item{link_by}{Character: Column name in data to use for linking.}
 
 \item{project_dir}{Character: Path to project directory containing .locusPackRat}
 }
@@ -27,5 +28,6 @@ addRatTable(
 Invisible TRUE on success
 }
 \description{
-Adds supplementary data tables linked to genes or regions in an existing project
+Adds supplementary data tables linked to genes or regions in an existing project.
+Can handle gene-based data, genomic regions, or point coordinates (e.g., SNPs).
 }
