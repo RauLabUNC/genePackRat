@@ -26,13 +26,21 @@
 #' @param threshold Numeric: LOD significance threshold used to draw the
 #'   horizontal line on the Manhattan plot (e.g. 5 for a 5-LOD threshold).
 #' @param output_file Character: File path for the output PDF. Defaults to
-#'   \code{"locus_zoom.pdf"} in the current working directory.
+#'   \code{"locus_zoom.pdf"} and will save to the \code{.locusPackRat/output}
+#'  directory found at \code{project_dir}.
+#' @param text_scale Numeric (optional): Scaling factor for all text elements
+#'   in the plot. If \code{NULL}, a default scaling based on the
+#'   \code{width} and \code{height} is applied (6x4 inches is considered
+#'   "normal" size with no scaling).
+#' @param font_family Character (optional): Font family to use for all text
+#'   elements in the plot. If \code{NULL}, the default system font is used.
 #' @return Invisible \code{TRUE} on success (the plot is written to disk).
 #'
 #' @importFrom data.table fread fwrite setDT setnames as.data.table setorderv copy
 #' @importFrom jsonlite read_json
 #' @importFrom grDevices pdf dev.off
 #' @importFrom plotgardener pageCreate plotManhattan plotGenes plotRanges plotText plotSignal annoYaxis annoHighlight
+#' @importFrom utils capture.output
 #'
 #' @examples
 #' \dontrun{
@@ -55,7 +63,7 @@
 #'   layout_ratios = c(manhattan = 0.35, signal = 0.40, genes = 0.25),
 #'   highlight_genes = c("Tspan5", "Stpg2"),
 #'   threshold       = 3.1,
-#'   text_scale      = 1.2,
+#'   text_scale      = 1.5,
 #'   font_family     = "Helvetica",
 #'   output_file     = "locus_zoom_region3_full.pdf"
 #' )
@@ -163,8 +171,9 @@ generateLocusZoomPlot <- function(
         )
     }
     
-    # 1c. PAGE, MARGINS, AND LAYOUT ---------------------------------------
-    grDevices::pdf(output_file, width = width, height = height)
+    # Set file to save to the 'output' directory of the project_dir
+    output_path <- file.path(project_dir, ".locusPackRat", "output", output_file)
+    grDevices::pdf(output_path, width = width, height = height)
     plotgardener::pageCreate(
         width = width,
         height = height,

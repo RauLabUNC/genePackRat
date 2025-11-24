@@ -1,7 +1,7 @@
 Package: locusPackRat
 Type: Package
 Title: Flexible R Package for Managing Genomic Analysis Projects
-Version: 0.2.0
+Version: 0.3.0
 Authors@R: c(
     person("Brian", "Gural", email = "bgural@unc.edu", role = c("aut", "cre")),
     person("Todd", "Kimball", role = "aut"),
@@ -10,9 +10,9 @@ Authors@R: c(
 Description: Provides a project-based workflow for genomic analyses with persistent data storage
     and integrated visualization. Instead of passing data between functions, users create
     persistent projects that store genes or genomic regions along with any supplementary data.
-    Features include persistent storage for loading data once and using many times, flexible
-    integration of any type of supplementary data, reproducible output generation with different
-    parameters, and multi-species support for human and mouse genomes (hg38, hg19, mm39, mm10).
+    Features include persistent storage and flexible integration of any type of supplementary data, 
+    custom Excel sheet generation, and multi-panel locus zoom plot generation via plotgardener.
+    Includes multi-species support for human and mouse genomes (hg38, hg19, mm39, mm10).
     Ideal for QTL/GWAS follow-up studies, gene set analyses, and systematic evaluation of
     candidate genes in genomic intervals.
 License: MIT + file LICENSE

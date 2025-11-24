@@ -9,10 +9,7 @@
 ^atacseq_analysis$
 ^cancer_genes$
 ^rnaseq_analysis$
-^examples$
 ^environment\.yml$
-^plotting.R$
 ^tests/locusZoom/data$
 ^EF21_Iso_Analysis$
-^test_plot_project$
 ^EF21_Iso_LocusZoom\.pdf$

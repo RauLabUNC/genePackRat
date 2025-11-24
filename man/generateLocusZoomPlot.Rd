@@ -54,7 +54,16 @@ the gene track (optional).}
 horizontal line on the Manhattan plot (e.g. 5 for a 5-LOD threshold).}
 
 \item{output_file}{Character: File path for the output PDF. Defaults to
-\code{"locus_zoom.pdf"} in the current working directory.}
+ \code{"locus_zoom.pdf"} and will save to the \code{.locusPackRat/output}
+directory found at \code{project_dir}.}
+
+\item{text_scale}{Numeric (optional): Scaling factor for all text elements
+in the plot. If \code{NULL}, a default scaling based on the
+\code{width} and \code{height} is applied (6x4 inches is considered
+"normal" size with no scaling).}
+
+\item{font_family}{Character (optional): Font family to use for all text
+elements in the plot. If \code{NULL}, the default system font is used.}
 }
 \value{
 Invisible \code{TRUE} on success (the plot is written to disk).
@@ -84,7 +93,7 @@ generateLocusZoomPlot(
   layout_ratios = c(manhattan = 0.35, signal = 0.40, genes = 0.25),
   highlight_genes = c("Tspan5", "Stpg2"),
   threshold       = 3.1,
-  text_scale      = 1.2,
+  text_scale      = 1.5,
   font_family     = "Helvetica",
   output_file     = "locus_zoom_region3_full.pdf"
 )
