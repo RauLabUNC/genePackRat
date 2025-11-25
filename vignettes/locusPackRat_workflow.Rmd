@@ -154,6 +154,13 @@ addRatTable(
 )
 ```
 
+### Add mouseMine and Open Targets data
+
+```{r add_mouseMine_and_Open_Targets_data_gene}
+queryMouseMine(project_dir = "rnaseq_analysis")
+queryOpenTargets(project_dir = "rnaseq_analysis") 
+```
+
 ## Generate Multi-Sheet Excel Workbook
 
 ```{r generate_gene_excel}
@@ -168,7 +175,8 @@ makeGeneSheet(
     "Downregulated" = "direction == 'down'",
     "High_Confidence" = "padj < 0.001 & abs(log2FC) > 2",
     "Brain_Specific" = "max_tissue == 'brain' & tissue_specific == TRUE",
-    "Immune_Genes" = "pathway == 'Immune response'"
+    "Immune_Genes" = "pathway == 'Immune response'",
+    "mouseMine_Immune" = "'Immune' %in% OntologyAnnotation.ontologyTerm.name"
   ),
   highlight_genes = c("Myc", "Tp53", "Egfr", "Il6", "Tnf"),
   include_supplementary = TRUE,
@@ -300,6 +308,13 @@ addRatTable(
   link_by = "chr,start,end",
   project_dir = "atacseq_analysis"
 )
+```
+
+### Add mouseMine and Open Targets data
+
+```{r add_mouseMine_and_Open_Targets_data_region}
+queryMouseMine(project_dir = "atacseq_analysis")
+queryOpenTargets(project_dir = "atacseq_analysis") 
 ```
 
 ## Generate Region Analysis Workbooks

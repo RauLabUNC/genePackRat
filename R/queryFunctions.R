@@ -229,7 +229,7 @@ queryOpenTargets <- function(project_dir = ".", limit = NULL, chunk_size = 50) {
         h_id <- g_dat$id
         
         # --- A. Diseases (Fixed Logic) ---
-        if (!is.null(g_dat$associatedDiseases$rows) && nrow(g_dat$associatedDiseases$rows) > 0) {
+        if (!is.null(g_dat$associatedDiseases$rows) && length(g_dat$associatedDiseases$rows) > 0) {
           # as.data.table automatically flattens 'disease' {id, name} -> 'disease.id', 'disease.name'
           d_dt <- data.table::as.data.table(g_dat$associatedDiseases$rows)
           
@@ -246,14 +246,14 @@ queryOpenTargets <- function(project_dir = ".", limit = NULL, chunk_size = 50) {
         }
         
         # --- B. Constraints ---
-        if (!is.null(g_dat$geneticConstraint) && nrow(g_dat$geneticConstraint) > 0) {
+        if (!is.null(g_dat$geneticConstraint) && length(g_dat$geneticConstraint) > 0) {
           c_dt <- data.table::as.data.table(g_dat$geneticConstraint)
           c_dt[, human_ensembl_id := h_id]
           results_constr[[length(results_constr) + 1]] <- c_dt
         }
         
         # --- C. Tractability ---
-        if (!is.null(g_dat$tractability) && nrow(g_dat$tractability) > 0) {
+        if (!is.null(g_dat$tractability) && length(g_dat$tractability) > 0) {
           t_dt <- data.table::as.data.table(g_dat$tractability)
           t_dt[, human_ensembl_id := h_id]
           results_tract[[length(results_tract) + 1]] <- t_dt
