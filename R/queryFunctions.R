@@ -15,11 +15,14 @@
 }
 
 #' Query MouseMine for Phenotypes
+#' 
+#' Draws Data on gene annotations from MouseMine.  MouseMine is downloadable using devtools::install_github("intermine/InterMineR")
 #'
 #' @param project_dir Character path to the project directory
 #' @param limit Integer (optional). If provided, limits the query to the first N genes. Useful for testing.
 #' @param chunk_size Integer. Number of genes to query per API call. Default 200.
 #'
+#' @return Invisible TRUE on success
 #' 
 #' @export
 queryMouseMine <- function(project_dir = ".", limit = NULL, chunk_size = 200) {
@@ -104,6 +107,8 @@ queryMouseMine <- function(project_dir = ".", limit = NULL, chunk_size = 200) {
 #' @param limit Integer (optional). Limit query to first N genes for testing.
 #' @param chunk_size Integer. Number of genes per API call (default 50).
 #'
+#' @return Invisible TRUE on success
+#' 
 #' @importFrom stats na.omit  
 #' @export
 queryOpenTargets <- function(project_dir = ".", limit = NULL, chunk_size = 50) {

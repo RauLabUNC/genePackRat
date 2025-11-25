@@ -13,6 +13,9 @@ queryOpenTargets(project_dir = ".", limit = NULL, chunk_size = 50)
 
 \item{chunk_size}{Integer. Number of genes per API call (default 50).}
 }
+\value{
+Invisible TRUE on success
+}
 \description{
 Fetches disease associations, genetic constraints, and drug tractability
 information from the Open Targets GraphQL API.
