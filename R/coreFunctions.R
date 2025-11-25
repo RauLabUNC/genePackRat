@@ -780,7 +780,7 @@ return(data)
 #' @noRd
 .generateOrthologyTable <- function(data, species, genome) {
   # Load orthology data from cached file
-  ortho_file <- system.file("extdata", "orthology_mapping.csv", package = "locusPackRat")
+  ortho_file <- system.file("extdata", "orthology.csv", package = "locusPackRat")
   if (ortho_file == "") {
     # Try test data location if package not installed
     ortho_file <- "tests/test_data/orthology_mapping.csv"
