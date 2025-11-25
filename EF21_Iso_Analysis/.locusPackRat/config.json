@@ -35,7 +35,61 @@
       "date_added": "2025-11-23",
       "n_rows": 76586,
       "n_cols": 13,
-      "columns": ["A", "B", "C", "D", "E", "F", "G", "H", "marker", "pos", "chr", "start", "end"]
+      "columns": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "E",
+        "F",
+        "G",
+        "H",
+        "marker",
+        "pos",
+        "chr",
+        "start",
+        "end"
+      ]
+    },
+    "opentargets_diseases": {
+      "link_type": "gene",
+      "link_by": "gene_symbol",
+      "date_added": "2025-11-24",
+      "n_rows": 541,
+      "n_cols": 5,
+      "columns": [
+        "gene_symbol",
+        "human_ensembl_id",
+        "disease_id",
+        "disease_name",
+        "score"
+      ]
+    },
+    "opentargets_constraints": {
+      "link_type": "gene",
+      "link_by": "gene_symbol",
+      "date_added": "2025-11-24",
+      "n_rows": 33,
+      "n_cols": 9,
+      "columns": [
+        "gene_symbol",
+        "human_ensembl_id",
+        "constraintType",
+        "exp",
+        "obs",
+        "score",
+        "oe",
+        "oeLower",
+        "oeUpper"
+      ]
+    },
+    "opentargets_tractability": {
+      "link_type": "gene",
+      "link_by": "gene_symbol",
+      "date_added": "2025-11-24",
+      "n_rows": 308,
+      "n_cols": 5,
+      "columns": ["gene_symbol", "human_ensembl_id", "label", "modality", "value"]
     }
   }
 }
