@@ -14,8 +14,9 @@ queryMouseMine(project_dir = ".", limit = NULL, chunk_size = 200)
 \item{chunk_size}{Integer. Number of genes to query per API call. Default 200.}
 }
 \value{
-Invisible TRUE on success
+Invisible data.table of results
 }
 \description{
-Draws Data on gene annotations from MouseMine.  MouseMine is downloadable using devtools::install_github("intermine/InterMineR")
+Queries the MouseMine database for gene phenotype annotations using the
+MouseMine REST API directly (no InterMineR dependency required).
 }

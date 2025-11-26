@@ -9,6 +9,7 @@ addRatTable(
   table_name,
   link_type = c("gene", "region", "point"),
   link_by = NULL,
+  abbreviation = NULL,
   project_dir = "."
 )
 }
@@ -21,6 +22,11 @@ addRatTable(
 "point" treats data as genomic positions (SNPs) and maps them to overlapping regions.}
 
 \item{link_by}{Character: Column name in data to use for linking.}
+
+\item{abbreviation}{Character: Optional short prefix (e.g., "mm", "otd") used to
+distinguish columns from this table when exporting to Excel.
+If another table has the same column name, this prefix will
+be prepended (e.g., "mm_description"). Must be unique per project.}
 
 \item{project_dir}{Character: Path to project directory containing .locusPackRat}
 }

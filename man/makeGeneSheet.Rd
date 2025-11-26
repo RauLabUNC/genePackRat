@@ -16,6 +16,7 @@ makeGeneSheet(
   split_criteria = NULL,
   include_supplementary = TRUE,
   collapse_multiples = TRUE,
+  prefix_mode = c("collision", "abbreviated", "always"),
   project_dir = "."
 )
 }
@@ -45,6 +46,11 @@ FALSE for none, or character vector of specific table names to include}
 collapse multiple matches per key into a single row by aggregating
 values (e.g. concatenating text). If FALSE, keep all matches as
 separate rows.}
+
+\item{prefix_mode}{Character: How to handle column name prefixing from supplementary tables.
+"collision" (default) only prefixes columns that would overwrite existing ones.
+"abbreviated" prefixes all columns from tables that have an abbreviation set.
+"always" prefixes all columns, using table_name as fallback if no abbreviation.}
 
 \item{project_dir}{Character: Path to project directory containing .locusPackRat}
 }

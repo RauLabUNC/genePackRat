@@ -130,6 +130,10 @@ initPackRat <- function(data,
 #' @param link_type Character: "gene", "region", or "point".
 #'                  "point" treats data as genomic positions (SNPs) and maps them to overlapping regions.
 #' @param link_by Character: Column name in data to use for linking.
+#' @param abbreviation Character: Optional short prefix (e.g., "mm", "otd") used to
+#'                      distinguish columns from this table when exporting to Excel.
+#'                      If another table has the same column name, this prefix will
+#'                      be prepended (e.g., "mm_description"). Must be unique per project.
 #' @param project_dir Character: Path to project directory containing .locusPackRat
 #'
 #' @return Invisible TRUE on success
@@ -142,6 +146,7 @@ addRatTable <- function(data,
                         table_name,
                         link_type = c("gene", "region", "point"),
                         link_by = NULL,
+                        abbreviation = NULL,
                         project_dir = ".") {
 
   # Validate inputs
@@ -165,6 +170,15 @@ addRatTable <- function(data,
     stop("Config file not found. Project may be corrupted.")
   }
   config <- jsonlite::read_json(config_file)
+
+  # Validate abbreviation uniqueness
+  if (!is.null(abbreviation)) {
+    existing_abbrevs <- sapply(config$supplementary_tables, function(t) t$abbreviation)
+    existing_abbrevs <- existing_abbrevs[!sapply(existing_abbrevs, is.null)]
+    if (abbreviation %in% existing_abbrevs) {
+      stop(sprintf("Abbreviation '%s' already used by another table.", abbreviation))
+    }
+  }
 
   message(sprintf("Adding supplementary table to %s %s project...",
                   config$species, config$genome))
@@ -259,6 +273,7 @@ addRatTable <- function(data,
   config$supplementary_tables[[table_name]] <- list(
     link_type = original_link_type, # Store what the user actually requested
     link_by = ifelse(is.null(link_by), "auto", link_by),
+    abbreviation = abbreviation,
     date_added = Sys.Date(),
     n_rows = nrow(linked_data),
     n_cols = ncol(linked_data),
@@ -430,6 +445,10 @@ listPackRatTables <- function(project_dir = ".", fullInfo=FALSE) {
 #'   collapse multiple matches per key into a single row by aggregating
 #'   values (e.g. concatenating text). If FALSE, keep all matches as
 #'   separate rows.
+#' @param prefix_mode Character: How to handle column name prefixing from supplementary tables.
+#'                    "collision" (default) only prefixes columns that would overwrite existing ones.
+#'                    "abbreviated" prefixes all columns from tables that have an abbreviation set.
+#'                    "always" prefixes all columns, using table_name as fallback if no abbreviation.
 #' @param project_dir Character: Path to project directory containing .locusPackRat
 #'
 #' @return data.table of the gene sheet (invisible)
@@ -450,11 +469,13 @@ makeGeneSheet <- function(filter_expr = NULL,
                           split_criteria = NULL,
                           include_supplementary = TRUE,
                           collapse_multiples = TRUE,
+                          prefix_mode = c("collision", "abbreviated", "always"),
                           project_dir = ".") {
 
   summary_level <- match.arg(summary_level)
   format <- match.arg(format)
   split_by <- match.arg(split_by)
+  prefix_mode <- match.arg(prefix_mode)
 
   packrat_dir <- file.path(project_dir, ".locusPackRat")
   if (!dir.exists(packrat_dir)) stop(sprintf("No .locusPackRat directory found at %s", packrat_dir))
@@ -525,6 +546,35 @@ makeGeneSheet <- function(filter_expr = NULL,
           if ("region_id" %in% common) merge_cols <- "region_id"
           else if (all(c("chr", "start", "end") %in% common)) merge_cols <- c("chr", "start", "end")
           else if ("gene_symbol" %in% common) merge_cols <- "gene_symbol"
+        }
+
+        # --- COLUMN PREFIXING ---
+        # Get abbreviation from config (or use table_name as fallback for "always" mode)
+        abbrev <- config$supplementary_tables[[table_name]]$abbreviation
+        val_cols <- setdiff(names(supp_data), merge_cols)
+
+        # Determine which columns to prefix based on mode
+        cols_to_prefix <- character(0)
+        prefix <- NULL
+
+        if (prefix_mode == "always") {
+          # Use abbreviation if set, otherwise table_name
+          prefix <- if (!is.null(abbrev)) abbrev else table_name
+          cols_to_prefix <- val_cols
+        } else if (prefix_mode == "abbreviated" && !is.null(abbrev)) {
+          # Prefix all columns from tables that have abbreviation
+          prefix <- abbrev
+          cols_to_prefix <- val_cols
+        } else if (prefix_mode == "collision" && !is.null(abbrev)) {
+          # Only prefix columns that would collide
+          prefix <- abbrev
+          cols_to_prefix <- intersect(names(base_data), val_cols)
+        }
+
+        if (length(cols_to_prefix) > 0 && !is.null(prefix)) {
+          new_names <- paste0(prefix, "_", cols_to_prefix)
+          setnames(supp_data, cols_to_prefix, new_names)
+          message(sprintf("    Prefixed %d columns with '%s_'", length(cols_to_prefix), prefix))
         }
 
         # --- B. EXECUTE MERGE LOGIC ---

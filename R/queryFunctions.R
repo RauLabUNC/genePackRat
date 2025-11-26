@@ -15,91 +15,119 @@
 }
 
 #' Query MouseMine for Phenotypes
-#' 
-#' Draws Data on gene annotations from MouseMine.  MouseMine is downloadable using devtools::install_github("intermine/InterMineR")
+#'
+#' Queries the MouseMine database for gene phenotype annotations using the
+#' MouseMine REST API directly (no InterMineR dependency required).
 #'
 #' @param project_dir Character path to the project directory
 #' @param limit Integer (optional). If provided, limits the query to the first N genes. Useful for testing.
 #' @param chunk_size Integer. Number of genes to query per API call. Default 200.
 #'
-#' @return Invisible TRUE on success
-#' 
+#' @return Invisible data.table of results
+#'
 #' @export
 queryMouseMine <- function(project_dir = ".", limit = NULL, chunk_size = 200) {
-  
-  # 1. Check Dependencies
-  if (!requireNamespace("InterMineR", quietly = TRUE)) {
-    stop("Please install 'InterMineR' to use this feature.")
-  }
-  
+
   packrat_dir <- file.path(project_dir, ".locusPackRat")
   if (!dir.exists(packrat_dir)) stop("Project not found.")
-  
-  # 2. Get Genes
+
+  # 1. Get Genes
+
   message("Retrieving gene list from project...")
   gene_syms <- .getProjectGenes(packrat_dir)
-  
+
   # Limit for testing
   if (!is.null(limit)) {
     message(sprintf("TEST MODE: Limiting query to first %d genes", limit))
     gene_syms <- head(gene_syms, limit)
   }
-  
-  # 3. Setup InterMine
-  im <- InterMineR::initInterMine(mine = InterMineR::listMines()["MouseMine"])
-  queryGenePath <- InterMineR::getTemplateQuery(im = im, name = "_Feature_Phenotype")
-  
-  # 4. Batch Processing
+
+  # 2. MouseMine REST API endpoint
+  base_url <- "http://www.mousemine.org/mousemine/service/template/results"
+
+  # 3. Batch Processing
   chunks <- split(gene_syms, ceiling(seq_along(gene_syms) / chunk_size))
-  
   results_list <- list()
-  
+
   message(sprintf("Querying %d genes in %d batches...", length(gene_syms), length(chunks)))
-  
+
   for (i in seq_along(chunks)) {
     syms <- chunks[[i]]
-    
-    # Update query constraint
-    queryGenePath$where[[4]] <- list(
-      path = "OntologyAnnotation.subject",
-      op = "LOOKUP",
-      value = paste(syms, collapse = ","),
-      code = "B"
-    )
-    
     message(sprintf("  Processing batch %d/%d...", i, length(chunks)))
-    
+
     tryCatch({
-      res <- InterMineR::runQuery(im, queryGenePath)
-      if (nrow(res) > 0) results_list[[i]] <- res
+      response <- httr::GET(
+        base_url,
+        query = list(
+          name = "_Feature_Phenotype",
+          constraint1 = "OntologyAnnotation.subject",
+          op1 = "LOOKUP",
+          value1 = paste(syms, collapse = ","),
+          format = "json"
+        )
+      )
+
+      if (httr::status_code(response) == 200) {
+        content <- httr::content(response, "text", encoding = "UTF-8")
+        parsed <- jsonlite::fromJSON(content, flatten = TRUE)
+
+        # Extract results from the JSON structure
+        if (!is.null(parsed$results) && length(parsed$results) > 0) {
+          # Convert to data.table with column names from columnHeaders
+          res_dt <- data.table::as.data.table(parsed$results)
+          if (!is.null(parsed$columnHeaders)) {
+            col_names <- parsed$columnHeaders
+            if (length(col_names) == ncol(res_dt)) {
+              names(res_dt) <- col_names
+            }
+          }
+          if (nrow(res_dt) > 0) results_list[[i]] <- res_dt
+        }
+      } else {
+        warning(sprintf("Batch %d failed with status %d", i, httr::status_code(response)))
+      }
     }, error = function(e) warning("Batch failed: ", e$message))
-    
+
     Sys.sleep(0.2) # Rate limiting
   }
-  
-  final_dt <- data.table::rbindlist(results_list, fill = TRUE)
-  final_dt <- final_dt[,c(2,5,6,8)] #filter to the columns we want to keep
-  
-  # 5. Clean & Save
-  if (nrow(final_dt) > 0) {
-    data.table::setnames(final_dt, "OntologyAnnotation.subject.symbol", "gene_symbol", skip_absent=TRUE)
-    data.table::setnames(final_dt, "OntologyAnnotation.ontologyTerm.name", "mouseMine.termName", skip_absent=TRUE)
-    data.table::setnames(final_dt, "OntologyAnnotation.evidence.publications.pubMedId", "mouseMine.PMID", skip_absent=TRUE)
-    data.table::setnames(final_dt, "OntologyAnnotation.evidence.comments.description", "mouseMine.description", skip_absent=TRUE)
 
-    
+  final_dt <- data.table::rbindlist(results_list, fill = TRUE)
+
+  # 4. Clean & Save
+  if (nrow(final_dt) > 0) {
+    # Rename columns to be more user-friendly
+    # API returns human-readable names like "Ontology Annotation > Subject . Symbol"
+    col_map <- c(
+      "Ontology Annotation > Subject . Symbol" = "gene_symbol",
+      "Ontology Annotation > Subject > Primary Identifier" = "mgi_id",
+      "Ontology Annotation > Term Name" = "phenotype",
+      "Ontology Annotation > Ontology Term . Identifier" = "mp_id",
+      "Ontology Annotation > Evidence > Publications > PubMed ID" = "pubmed_id",
+      "Ontology Annotation > Evidence > Comments > Description" = "description"
+    )
+    for (old_name in names(col_map)) {
+      if (old_name %in% names(final_dt)) {
+        data.table::setnames(final_dt, old_name, col_map[[old_name]])
+      }
+    }
+    # Drop less useful columns
+    drop_cols <- c("Ontology Annotation > Subject > Type",
+                   "Ontology Annotation > Evidence > Comments > Type")
+    final_dt[, (intersect(drop_cols, names(final_dt))) := NULL]
+
     addRatTable(
       data = final_dt,
       table_name = "mouse_phenotypes",
       link_type = "gene",
       link_by = "gene_symbol",
+      abbreviation = "mm",
       project_dir = project_dir
     )
     message("Success: 'mouse_phenotypes' added to project.")
   } else {
     warning("No phenotypes found for these genes.")
   }
-  
+
   invisible(final_dt)
 }
 
@@ -270,7 +298,7 @@ queryOpenTargets <- function(project_dir = ".", limit = NULL, chunk_size = 50) {
   }
   
   # 6. Save Results
-  save_ot_table <- function(list_data, suffix) {
+  .saveOtTable <- function(list_data, suffix) {
     if (length(list_data) > 0) {
       dt <- data.table::rbindlist(list_data, fill = TRUE, use.names = TRUE)
       
@@ -286,19 +314,23 @@ queryOpenTargets <- function(project_dir = ".", limit = NULL, chunk_size = 50) {
         data.table::setcolorder(dt, col_order)
       }
       
+      # Map suffix to distinct abbreviations
+      abbrev_map <- c(diseases = "otd", constraints = "otc", tractability = "ott")
+
       addRatTable(
         data = dt,
-        table_name = paste0("opentargets.", suffix),
+        table_name = paste0("ot_", suffix),
         link_type = "gene",
         link_by = "gene_symbol",
+        abbreviation = abbrev_map[[suffix]],
         project_dir = project_dir
       )
     }
   }
-  
-  save_ot_table(results_assoc, "diseases")
-  save_ot_table(results_constr, "constraints")
-  save_ot_table(results_tract, "tractability")
+
+  .saveOtTable(results_assoc, "diseases")
+  .saveOtTable(results_constr, "constraints")
+  .saveOtTable(results_tract, "tractability")
   
   invisible(list(diseases = results_assoc, constraints = results_constr, tractability = results_tract))
 }

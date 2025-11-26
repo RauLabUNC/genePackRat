@@ -28,7 +28,6 @@ Imports:
     plotgardener,
     httr
 Suggests:
-    InterMineR,
     tidyr,
     RColorBrewer,
     GenomicRanges,
