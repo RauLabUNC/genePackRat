@@ -626,6 +626,9 @@ makeGeneSheet <- function(filter_expr = NULL,
 #' Process Gene Input Data
 #' @noRd
 .processGeneInput <- function(data, species, genome) {
+  # Make a defensive copy to avoid modifying the caller's data
+  data <- copy(data)
+
   # Detect ID type based on column names
   gene_cols <- c("gene_symbol", "gene_name", "symbol", "ensembl_id", "gene_id", "id")
   id_col <- intersect(names(data), gene_cols)[1]
@@ -711,6 +714,9 @@ makeGeneSheet <- function(filter_expr = NULL,
 #' Process Region Input Data
 #' @noRd
 .processRegionInput <- function(data, species, genome) {
+  # Make a defensive copy to avoid modifying the caller's data
+  data <- copy(data)
+
   # Check for required columns
   required <- c("chr", "start", "end")
   missing <- setdiff(required, names(data))
