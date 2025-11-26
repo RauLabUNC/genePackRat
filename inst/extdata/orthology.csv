@@ -1,4 +1,4 @@
-mouse_ensembl_id,human_ensembl_id,human_gene_symbol,mouse_gene_symbol
+human_ensembl_id,mouse_ensembl_id,mouse_gene_symbol,human_gene_symbol
 ENSG00000168887,ENSMUSG00000058706,C2orf68,0610030E20Rik
 ENSG00000248713,ENSMUSG00000090066,C4orf54,1110002E22Rik
 ENSG00000110696,ENSMUSG00000030663,C11orf58,1110004F10Rik

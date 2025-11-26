@@ -13,3 +13,5 @@
 ^tests/locusZoom/data$
 ^EF21_Iso_Analysis$
 ^EF21_Iso_LocusZoom\.pdf$
+^.*\.Rproj$
+^\.Rproj\.user$

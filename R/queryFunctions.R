@@ -78,10 +78,15 @@ queryMouseMine <- function(project_dir = ".", limit = NULL, chunk_size = 200) {
   }
   
   final_dt <- data.table::rbindlist(results_list, fill = TRUE)
+  final_dt <- final_dt[,c(2,5,6,8)] #filter to the columns we want to keep
   
   # 5. Clean & Save
   if (nrow(final_dt) > 0) {
     data.table::setnames(final_dt, "OntologyAnnotation.subject.symbol", "gene_symbol", skip_absent=TRUE)
+    data.table::setnames(final_dt, "OntologyAnnotation.ontologyTerm.name", "mouseMine.termName", skip_absent=TRUE)
+    data.table::setnames(final_dt, "OntologyAnnotation.evidence.publications.pubMedId", "mouseMine.PMID", skip_absent=TRUE)
+    data.table::setnames(final_dt, "OntologyAnnotation.evidence.comments.description", "mouseMine.description", skip_absent=TRUE)
+
     
     addRatTable(
       data = final_dt,
@@ -283,7 +288,7 @@ queryOpenTargets <- function(project_dir = ".", limit = NULL, chunk_size = 50) {
       
       addRatTable(
         data = dt,
-        table_name = paste0("opentargets_", suffix),
+        table_name = paste0("opentargets.", suffix),
         link_type = "gene",
         link_by = "gene_symbol",
         project_dir = project_dir

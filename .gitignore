@@ -1,6 +1,7 @@
 # R package development
 .Rhistory
 .RData
+.Rbuildignore
 .Rproj.user/
 *.Rproj
 temp_lib/
@@ -16,7 +17,8 @@ tests/slurm/test_results/
 tests/integration/output/
 tests/test_r_libs/
 tests/test_r_libs_old/
-
+vignettes/rnaseq_analysis/
+rnaseq_analysis/
 # renv
 renv/
 .Rprofile

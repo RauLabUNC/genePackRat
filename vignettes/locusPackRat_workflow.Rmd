@@ -176,7 +176,7 @@ makeGeneSheet(
     "High_Confidence" = "padj < 0.001 & abs(log2FC) > 2",
     "Brain_Specific" = "max_tissue == 'brain' & tissue_specific == TRUE",
     "Immune_Genes" = "pathway == 'Immune response'",
-    "mouseMine_Immune" = "'Immune' %in% OntologyAnnotation.ontologyTerm.name"
+    "mouseMine_Immune" = "grepl('immune',OntologyAnnotation.ontologyTerm.name)"
   ),
   highlight_genes = c("Myc", "Tp53", "Egfr", "Il6", "Tnf"),
   include_supplementary = TRUE,

@@ -4,10 +4,12 @@
 \alias{listPackRatTables}
 \title{List Supplementary Tables in locusPackRat Project}
 \usage{
-listPackRatTables(project_dir = ".")
+listPackRatTables(project_dir = ".", fullInfo = FALSE)
 }
 \arguments{
 \item{project_dir}{Character: Path to project directory containing .locusPackRat}
+
+\item{fullInfo}{Boolean: If true, prints all column names for each supplementary table}
 }
 \value{
 data.table with table information (name, link_type, link_by, n_rows, n_cols)

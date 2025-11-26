@@ -277,7 +277,8 @@ addRatTable <- function(data,
 #' Returns information about available supplementary tables in a project
 #'
 #' @param project_dir Character: Path to project directory containing .locusPackRat
-#'
+#' @param fullInfo Boolean: If true, prints all column names for each supplementary table
+#' 
 #' @return data.table with table information (name, link_type, link_by, n_rows, n_cols)
 #'
 #' @importFrom data.table data.table fread
@@ -285,7 +286,7 @@ addRatTable <- function(data,
 #' @importFrom jsonlite read_json
 #'
 #' @export
-listPackRatTables <- function(project_dir = ".") {
+listPackRatTables <- function(project_dir = ".", fullInfo=FALSE) {
   # Check for existing project
   packrat_dir <- file.path(project_dir, ".locusPackRat")
   if (!dir.exists(packrat_dir)) {
@@ -368,7 +369,16 @@ listPackRatTables <- function(project_dir = ".") {
                    table_info$n_cols[i],
                    table_info$link_by[i]))
   }
-
+  if(fullInfo){
+    message(sprintf("Printing full column names for %d supplementary table(s)",nrow(table_info)))
+    for(i in 1:length(config$supplementary_tables)){
+      name=names(config$supplementary_tables[i][1])
+      columns=paste(unlist(config$supplementary_tables[i][[1]]$columns),collapse=" ; ")
+      message(sprintf("Columns in %s:",name))
+      message(sprintf(columns))
+    }
+    message(sprintf("Completed"))
+  }
   return(table_info)
 }
 
