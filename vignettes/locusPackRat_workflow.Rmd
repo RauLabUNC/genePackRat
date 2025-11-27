@@ -161,7 +161,21 @@ queryMouseMine(project_dir = "rnaseq_analysis")
 queryOpenTargets(project_dir = "rnaseq_analysis") 
 ```
 
+### Examine Package Structure Before Creating Output
+
+```{r gene_examine_package}
+listPackRatTables(project_dir = "rnaseq_analysis",fullInfo = T)
+
+```
+
 ## Generate Multi-Sheet Excel Workbook
+
+Additional sheets can be created from any boolean (True/False) argument.
+Boolean statements in R can be strung together with & (and) or | (or).
+We recommend examining the package structure above with fullInfo = T to identify column names
+
+Note: beware of capitalization.  For whatever reason mouseMine does not capitalize any terms other than gene names, while OpenTargets is somewhat inconsistent.  If needed, more complex arguments e.g. ('Cardiac' | 'cardiac') & padj <.001 may be used.
+
 
 ```{r generate_gene_excel}
 # Create Excel workbook with multiple filtered views

@@ -711,7 +711,13 @@ makeGeneSheet <- function(filter_expr = NULL,
         coords_file <- "tests/test_data/mouse_coords_mm39.csv"
       }
     }
-    # Could add mm10 support here
+    if (genome == "mm10") {
+      coords_file <- system.file("extdata", "mouse_coords_mm10.csv", package = "locusPackRat")
+      if (coords_file == "") {
+        # Try test data location if package not installed
+        coords_file <- "tests/test_data/mouse_coords_mm10.csv"
+      }
+    }
   } else if (species == "human") {
     if (genome == "hg38") {
       coords_file <- system.file("extdata", "human_coords_hg38.csv", package = "locusPackRat")
@@ -720,7 +726,13 @@ makeGeneSheet <- function(filter_expr = NULL,
         coords_file <- "tests/test_data/human_coords_hg38.csv"
       }
     }
-    # Could add hg19 support here
+    if (genome == "hg19") {
+      coords_file <- system.file("extdata", "human_coords_hg19.csv", package = "locusPackRat")
+      if (coords_file == "") {
+        # Try test data location if package not installed
+        coords_file <- "tests/test_data/human_coords_hg19.csv"
+      }
+    }
   }
 
   # Initialize result with input gene symbols
