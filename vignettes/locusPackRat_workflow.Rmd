@@ -46,13 +46,18 @@ knitr::opts_chunk$set(
 The package includes complete genome-wide coordinate files generated from Ensembl Biomart:
 
 - `mouse_coords_mm39.csv`: ~60,000 mouse genes (GRCm39)
+- `mouse_coords_mm10.csv`: ~38,000 mouse genes (GRCm10)
 - `human_coords_hg38.csv`: ~30,000 human genes (GRCh38)
+- `human_coords_hg19.csv`: ~24,000 human genes (GRCh19)
 
 # Installation
 
 ```{r install, eval=FALSE}
 # Install from GitHub
 #devtools::install_github("RauLabUNC/locusPackRat")
+
+#Or, install locally
+#devtools::install_local("Path/To/File/locusPackRat.zip")
 
 # Load required libraries
 library(locusPackRat)
@@ -68,7 +73,7 @@ library(jsonlite)
 
 # Gene Mode Analysis
 
-Gene mode is designed for analyzing gene lists from RNA-seq or other gene-centric studies.
+Gene mode is designed for analyzing gene lists from RNA-seq or other gene-centric studies.  See below for Region Mode, designed for analysis of a chromosome region
 
 ## Initialize Project with Gene List
 
@@ -206,6 +211,9 @@ makeGeneSheet(
 
 Region mode is designed for analyzing genomic intervals from ATAC-seq, ChIP-seq, or QTL mapping.
 
+
+We include two versions of Region Mode Analysis:  The first for QTL mapping, the second for ATAC-seq data.
+
 ## Initialize Project with Genomic Regions
 
 ```{r region_mode_init}
@@ -264,6 +272,7 @@ chromatin_states <- data.table(
 addRatTable(
   data = chromatin_states,
   table_name = "chromatin_states",
+  abbreviation = "cs",
   link_type = "region",
   link_by = "chr,start,end",
   project_dir = "atacseq_analysis"
@@ -297,6 +306,7 @@ motif_data <- rbind(motif_data, additional_motifs)
 addRatTable(
   data = motif_data,
   table_name = "tf_motifs",
+  abbreviation = "tf_motifs",
   link_type = "region",
   link_by = "chr,start,end",
   project_dir = "atacseq_analysis"
@@ -322,6 +332,7 @@ diff_access <- data.table(
 addRatTable(
   data = diff_access,
   table_name = "differential_accessibility",
+  abbreviation = "da",
   link_type = "region",
   link_by = "chr,start,end",
   project_dir = "atacseq_analysis"
@@ -330,9 +341,16 @@ addRatTable(
 
 ### Add mouseMine and Open Targets data
 
-```{r add_mouseMine_and_Open_Targets_data_region}
+```{r add_mouseMine_and_Open_Targets_data_ATAC}
 queryMouseMine(project_dir = "atacseq_analysis")
 queryOpenTargets(project_dir = "atacseq_analysis") 
+```
+
+### Examine Package Structure Before Creating Output
+
+```{r gene_examine_package_ATAC}
+listPackRatTables(project_dir = "atacseq_analysis",fullInfo = T)
+
 ```
 
 ## Generate Region Analysis Workbooks
@@ -442,9 +460,9 @@ makeGeneSheet(
 
 ```{r list_tables}
 # View supplementary tables in each project
-listPackRatTables("rnaseq_analysis")
-listPackRatTables("atacseq_analysis")
-listPackRatTables("cancer_genes")
+listPackRatTables("rnaseq_analysis",fullInfo = T)
+listPackRatTables("atacseq_analysis",fullInfo = T)
+listPackRatTables("cancer_genes",fullInfo = T)
 ```
 
 ## Project Configuration

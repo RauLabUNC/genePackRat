@@ -19,6 +19,8 @@ tests/test_r_libs/
 tests/test_r_libs_old/
 vignettes/rnaseq_analysis/
 rnaseq_analysis/
+atacseq_analysis/
+qtl_analysis/
 # renv
 renv/
 .Rprofile
