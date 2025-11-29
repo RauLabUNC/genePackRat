@@ -126,6 +126,7 @@ tissue_expression[, tissue_specific := apply(.SD, 1, function(x) max(x)/mean(x) 
 addRatTable(
   data = tissue_expression,
   table_name = "tissue_expression",
+  abbreviation = "te",
   link_type = "gene",
   link_by = "gene_symbol",
   project_dir = "rnaseq_analysis"
@@ -148,6 +149,7 @@ pathway_data <- data.table(
 addRatTable(
   data = unique(pathway_data),
   table_name = "pathway_annotations",
+ # abbreviation = "pa",
   link_type = "gene",
   link_by = "gene_symbol",
   project_dir = "rnaseq_analysis"
@@ -176,6 +178,7 @@ We recommend examining the package structure above with fullInfo = T to identify
 
 Note: beware of capitalization.  For whatever reason mouseMine does not capitalize any terms other than gene names, while OpenTargets is somewhat inconsistent.  If needed, more complex arguments e.g. ('Cardiac' | 'cardiac') & padj <.001 may be used.
 
+Note 2:  If two supplemental tables share a column name, the code will append the table's abbreviation to the column name: (e.g. if the table abbreviation is 'ab' and the column is 'value', it will become 'ab_value').  It is also possible to set the prefix_mode argument below to "abbreviated", in which case all columns from tables with an abbreviation will have it appended by default.
 
 ```{r generate_gene_excel}
 # Create Excel workbook with multiple filtered views
@@ -183,6 +186,7 @@ makeGeneSheet(
   format = "excel",
   output_file = "rnaseq_complete_analysis.xlsx",
   split_by = "criteria",
+  prefix_mode = "collision",
   split_criteria = list(
     "All_DEGs" = "TRUE",
     "Upregulated" = "direction == 'up'",
@@ -190,7 +194,7 @@ makeGeneSheet(
     "High_Confidence" = "padj < 0.001 & abs(log2FC) > 2",
     "Brain_Specific" = "max_tissue == 'brain' & tissue_specific == TRUE",
     "Immune_Genes" = "pathway == 'Immune response'",
-    "mouseMine_Immune" = "grepl('immune',OntologyAnnotation.ontologyTerm.name)"
+    "mouseMine_Immune" = "grepl('immune',phenotype)"
   ),
   highlight_genes = c("Myc", "Tp53", "Egfr", "Il6", "Tnf"),
   include_supplementary = TRUE,
@@ -491,3 +495,5 @@ makeGeneSheet(
 ```{r session}
 sessionInfo()
 ```
+
+

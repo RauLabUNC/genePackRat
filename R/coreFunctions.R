@@ -342,6 +342,8 @@ listPackRatTables <- function(project_dir = ".", fullInfo=FALSE) {
       tbl_config <- config$supplementary_tables[[table_name]]
       info <- data.table(
         table_name = table_name,
+        table_abbr = ifelse(is.null(tbl_config$abbreviation) | length(tbl_config$abbreviation)==0, 
+          NA_character_, tbl_config$abbreviation),
         link_type = ifelse(is.null(tbl_config$link_type), NA_character_, tbl_config$link_type),
         link_by = ifelse(is.null(tbl_config$link_by), NA_character_, tbl_config$link_by),
         n_rows = ifelse(is.null(tbl_config$n_rows), NA_integer_, tbl_config$n_rows),
@@ -355,6 +357,7 @@ listPackRatTables <- function(project_dir = ".", fullInfo=FALSE) {
         temp_data <- fread(file_path, nrows = 1)
         info <- data.table(
           table_name = table_name,
+          table_abbr = NA_character_,
           link_type = NA_character_,
           link_by = NA_character_,
           n_rows = as.integer(system(sprintf("wc -l < '%s'", file_path), intern = TRUE)) - 1L,
@@ -364,6 +367,7 @@ listPackRatTables <- function(project_dir = ".", fullInfo=FALSE) {
       }, error = function(e) {
         info <- data.table(
           table_name = table_name,
+          table_abbr = NA_character_,
           link_type = NA_character_,
           link_by = NA_character_,
           n_rows = NA_integer_,
@@ -372,7 +376,7 @@ listPackRatTables <- function(project_dir = ".", fullInfo=FALSE) {
         )
       })
     }
-
+  #  message(sprintf("on %s table",sf))
     table_info <- bind_rows(table_info, info)
   }
 
