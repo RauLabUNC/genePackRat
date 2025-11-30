@@ -10,6 +10,7 @@ initPackRat(
   species = c("human", "mouse"),
   genome = c("hg38", "hg19", "mm39", "mm10"),
   project_dir = ".",
+  keep_pseudo = FALSE,
   force = FALSE
 )
 }
@@ -23,6 +24,8 @@ initPackRat(
 \item{genome}{Character: "hg19", "hg38", "mm10", or "mm39"}
 
 \item{project_dir}{Character: Path to project directory (default: current directory)}
+
+\item{keep_pseudo}{Logical: If FALSE, removes all gm***** genes from region list.  Does nothing in gene mode}
 
 \item{force}{Logical: Overwrite existing .locusPackRat directory if it exists}
 }

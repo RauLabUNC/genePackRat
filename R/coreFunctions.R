@@ -7,6 +7,7 @@
 #' @param species Character: "human" or "mouse"
 #' @param genome Character: "hg19", "hg38", "mm10", or "mm39"
 #' @param project_dir Character: Path to project directory (default: current directory)
+#' @param keep_pseudo Logical: If FALSE, removes all gm***** genes from region list.  Does nothing in gene mode
 #' @param force Logical: Overwrite existing .locusPackRat directory if it exists
 #'
 #' @return Invisible TRUE on success
@@ -26,6 +27,7 @@ initPackRat <- function(data,
                        species = c("human", "mouse"),
                        genome = c("hg38", "hg19", "mm39", "mm10"),
                        project_dir = ".",
+                       keep_pseudo = FALSE,
                        force = FALSE) {
 
   # Validate inputs
@@ -73,7 +75,7 @@ initPackRat <- function(data,
     output_file <- file.path(packrat_dir, "input", "genes.csv")
   } else {
     message("Processing region list...")
-    processed_data <- .processRegionInput(data, species, genome)
+    processed_data <- .processRegionInput(data, species, genome,keep_pseudo)
     output_file <- file.path(packrat_dir, "input", "regions.csv")
   }
 
@@ -789,7 +791,7 @@ makeGeneSheet <- function(filter_expr = NULL,
 
 #' Process Region Input Data
 #' @noRd
-.processRegionInput <- function(data, species, genome) {
+.processRegionInput <- function(data, species, genome,keep_pseudo) {
   # Make a defensive copy to avoid modifying the caller's data
   data <- copy(data)
 
@@ -832,6 +834,9 @@ makeGeneSheet <- function(filter_expr = NULL,
   coord_type <- paste0(species, "_coords_", genome, ".csv")
   coords_file <- system.file("extdata", coord_type, package = "locusPackRat")
   coords <- fread(coords_file)
+  if(!keep_pseudo){
+    coords <- coords[-grep("^Gm",coords$gene_symbol)]
+  }
 
   # Ensure numeric coordinates
   coords[, start := as.numeric(start)]
@@ -844,6 +849,7 @@ makeGeneSheet <- function(filter_expr = NULL,
                       on = .(chr, start <= end, end >= start),
                       nomatch = NULL]
   if (nrow(overlaps) > 0) {
+      
       # Collapse multiple genes into a single comma-separated string
       genes_aggregated <- overlaps[, .(genes = paste(unique(gene_symbol), collapse = ", ")),
                                   by = region_id]
