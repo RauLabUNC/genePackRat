@@ -306,7 +306,7 @@ addRatTable(
 
 ```{r add_mouseMine_and_Open_Targets_data_QTL}
 queryMouseMine(project_dir = "qtl_analysis")
-#queryOpenTargets(project_dir = "qtl_analysis") 
+queryOpenTargets(project_dir = "qtl_analysis") 
 ```
 
 ### Examine Package Structure Before Creating Output

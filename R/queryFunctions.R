@@ -303,7 +303,7 @@ queryOpenTargets <- function(project_dir = ".", limit = NULL, chunk_size = 50) {
       dt <- data.table::rbindlist(list_data, fill = TRUE, use.names = TRUE)
       
       # Merge back original symbols (e.g. Mouse Symbols)
-      dt <- merge(dt, id_map, by = "human_ensembl_id", all.x = TRUE)
+      dt <- merge(dt, id_map, by = "human_ensembl_id", all.x = TRUE,allow.cartesian = T)
       
       # Clean up: remove disease column if it persists (rare edge case)
       if ("disease" %in% names(dt)) dt[, disease := NULL]
