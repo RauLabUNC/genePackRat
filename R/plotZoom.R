@@ -98,7 +98,8 @@ generateLocusZoomPlot <- function(
     if (is.null(region_id)) region_id <- regions$region_id[1]
     
     # IMPORTANT: correct data.table filtering
-    target_region <- regions[regions$region_id == region_id, ]
+    temp=region_id # otherwise it won't play nice.
+    target_region <- regions[which(regions$region_id == temp), ]
     if (nrow(target_region) != 1L) {
         stop("Expected exactly 1 row for region_id = ", region_id,
              ", got ", nrow(target_region))
@@ -316,7 +317,7 @@ generateLocusZoomPlot <- function(
         h            = h_genes,
         genome_extra = genome_extra,
         text_sizes   = text_sizes,
-        font_family  = font_family
+       font_family  = font_family
     )
     
     grDevices::dev.off()
