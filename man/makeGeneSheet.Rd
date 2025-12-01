@@ -18,7 +18,14 @@ makeGeneSheet(
   exclude_tables = NULL,
   collapse_multiples = TRUE,
   prefix_mode = c("collision", "abbreviated", "always"),
-  project_dir = "."
+  project_dir = ".",
+  format_numbers = TRUE,
+  format_pvalues = TRUE,
+  format_coordinates = TRUE,
+  include_summary = TRUE,
+  header_color = "#4472C4",
+  min_col_width = 10,
+  merge_repeated = FALSE
 )
 }
 \arguments{
@@ -56,6 +63,20 @@ separate rows.}
 "always" prefixes all columns, using table_name as fallback if no abbreviation.}
 
 \item{project_dir}{Character: Path to project directory containing .locusPackRat}
+
+\item{format_numbers}{Logical: Auto-detect and format numeric columns (default TRUE)}
+
+\item{format_pvalues}{Logical: Apply scientific notation to p-value columns (default TRUE)}
+
+\item{format_coordinates}{Logical: Apply thousands separator to coordinate columns (default TRUE)}
+
+\item{include_summary}{Logical: Add a summary sheet with workbook metadata (default TRUE)}
+
+\item{header_color}{Character: Hex color for header background (default "#4472C4" - Excel blue)}
+
+\item{min_col_width}{Numeric: Minimum column width in characters (default 10)}
+
+\item{merge_repeated}{Logical: Merge consecutive cells with same gene_symbol in Phenotypes_Detail sheet (default FALSE)}
 }
 \value{
 data.table of the gene sheet (invisible)

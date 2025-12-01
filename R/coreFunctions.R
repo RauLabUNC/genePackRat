@@ -7,7 +7,8 @@
 #' @param species Character: "human" or "mouse"
 #' @param genome Character: "hg19", "hg38", "mm10", or "mm39"
 #' @param project_dir Character: Path to project directory (default: current directory)
-#' @param keep_pseudo Logical: If FALSE, removes all gm***** genes from region list.  Does nothing in gene mode
+#' @param keep_pseudo Logical: If FALSE, removes pseudogenes (Gm* and *Rik genes)
+#'   from region list. Does nothing in gene mode.
 #' @param force Logical: Overwrite existing .locusPackRat directory if it exists
 #' @param overlap_mode Character: "any" (default) keeps genes with any overlap,
 #'                      "complete" keeps only genes entirely within regions
@@ -511,6 +512,13 @@ listPackRatTables <- function(project_dir = ".", fullInfo=FALSE) {
 #'                    "always" prefixes all columns, using table_name as fallback if no abbreviation.
 #' @param project_dir Character: Path to project directory containing .locusPackRat
 #' @param exclude_tables Character vector: Names of supplementary tables to exclude from output
+#' @param format_numbers Logical: Auto-detect and format numeric columns (default TRUE)
+#' @param format_pvalues Logical: Apply scientific notation to p-value columns (default TRUE)
+#' @param format_coordinates Logical: Apply thousands separator to coordinate columns (default TRUE)
+#' @param include_summary Logical: Add a summary sheet with workbook metadata (default TRUE)
+#' @param header_color Character: Hex color for header background (default "#4472C4" - Excel blue)
+#' @param min_col_width Numeric: Minimum column width in characters (default 10)
+#' @param merge_repeated Logical: Merge consecutive cells with same gene_symbol in Phenotypes_Detail sheet (default FALSE)
 #'
 #' @return data.table of the gene sheet (invisible)
 #'
@@ -532,7 +540,14 @@ makeGeneSheet <- function(filter_expr = NULL,
                           exclude_tables = NULL,
                           collapse_multiples = TRUE,
                           prefix_mode = c("collision", "abbreviated", "always"),
-                          project_dir = ".") {
+                          project_dir = ".",
+                          format_numbers = TRUE,
+                          format_pvalues = TRUE,
+                          format_coordinates = TRUE,
+                          include_summary = TRUE,
+                          header_color = "#4472C4",
+                          min_col_width = 10,
+                          merge_repeated = FALSE) {
 
   summary_level <- match.arg(summary_level)
   format <- match.arg(format)
@@ -743,7 +758,22 @@ makeGeneSheet <- function(filter_expr = NULL,
     fwrite(output_data, final_path)
     message(sprintf("Saved CSV to %s", final_path))
   } else {
-    wb <- .createFormattedExcel(output_data, highlight_genes, highlight_expr, highlight_color, split_by, split_criteria)
+    wb <- .createFormattedExcel(
+      data = output_data,
+      highlight_genes = highlight_genes,
+      highlight_expr = highlight_expr,
+      highlight_color = highlight_color,
+      split_by = split_by,
+      split_criteria = split_criteria,
+      format_numbers = format_numbers,
+      format_pvalues = format_pvalues,
+      format_coordinates = format_coordinates,
+      include_summary = include_summary,
+      header_color = header_color,
+      min_col_width = min_col_width,
+      filter_expr = filter_expr,
+      merge_repeated = merge_repeated
+    )
     openxlsx::saveWorkbook(wb, final_path, overwrite = TRUE)
     message(sprintf("Saved Excel to %s", final_path))
   }
@@ -898,8 +928,13 @@ makeGeneSheet <- function(filter_expr = NULL,
   coord_type <- paste0(species, "_coords_", genome, ".csv")
   coords_file <- system.file("extdata", coord_type, package = "locusPackRat")
   coords <- fread(coords_file)
-  if(!keep_pseudo){
-    coords <- coords[-grep("^Gm",coords$gene_symbol)]
+  if (!keep_pseudo) {
+    # Filter out Gm* genes and genes ending in Rik (both are pseudogenes)
+    pseudo_pattern <- "^Gm[0-9]|Rik$"
+    pseudo_idx <- grep(pseudo_pattern, coords$gene_symbol)
+    if (length(pseudo_idx) > 0) {
+      coords <- coords[-pseudo_idx]
+    }
   }
 
   # Ensure numeric coordinates
@@ -1007,6 +1042,12 @@ makeGeneSheet <- function(filter_expr = NULL,
   if ("gene_symbol" %in% names(data)) {
     genes <- unique(data$gene_symbol)
     genes <- genes[!is.na(genes)]
+  } else if ("genes" %in% names(data)) {
+    # Region mode: extract genes from comma-separated column
+    genes_raw <- data$genes[!is.na(data$genes) & data$genes != ""]
+    genes <- unique(unlist(strsplit(genes_raw, ", ")))
+    genes <- trimws(genes)
+    genes <- genes[genes != ""]
   } else if ("ensembl_id" %in% names(data)) {
     ensembl_ids <- unique(data$ensembl_id)
     ensembl_ids <- ensembl_ids[!is.na(ensembl_ids)]
@@ -1256,19 +1297,619 @@ makeGeneSheet <- function(filter_expr = NULL,
   return(summary)
 }
 
-#' Create Formatted Excel Workbook (Safely)
+#' Detect Column Format Based on Name and Data
+#' @noRd
+.detectColumnFormat <- function(col_name, col_data) {
+  name_lower <- tolower(col_name)
+
+  # P-value patterns
+  if (grepl("pval|p\\.value|p_value|fdr|qvalue|padj|adj\\.p", name_lower)) {
+    return("scientific")
+  }
+  # Fold change patterns
+  if (grepl("log2|lfc|fold|fc$|_fc_", name_lower)) {
+    return("decimal2")
+  }
+  # Coordinate patterns
+  if (grepl("^(start|end)$|_start$|_end$|position|^pos$|_pos$", name_lower)) {
+    return("thousands")
+  }
+  # Percentage patterns
+  if (grepl("percent|pct|proportion", name_lower)) {
+    return("percent")
+  }
+
+  return("general")
+}
+
+#' Calculate Smart Column Width
+#' @noRd
+.calculateColumnWidth <- function(col_name, col_data, min_width = 10, max_width = 50) {
+  # Get header width
+  header_width <- nchar(col_name)
+
+  # Sample data width (first 100 non-NA values)
+  if (is.character(col_data) || is.factor(col_data)) {
+    sample_data <- head(col_data[!is.na(col_data)], 100)
+    if (length(sample_data) > 0) {
+      data_width <- max(nchar(as.character(sample_data)), na.rm = TRUE)
+    } else {
+      data_width <- 0
+    }
+  } else if (is.numeric(col_data)) {
+    # Numbers need less width
+    data_width <- 12
+  } else {
+    data_width <- 10
+  }
+
+  # Return constrained width
+  width <- max(header_width, data_width) + 2  # Add padding
+  return(min(max(width, min_width), max_width))
+}
+
+#' Create Summary Sheet
+#' @noRd
+.createSummarySheet <- function(wb, sheets_info, filter_expr = NULL) {
+  openxlsx::addWorksheet(wb, "Summary", gridLines = FALSE)
+
+  # Get package version
+ pkg_version <- tryCatch(
+    as.character(utils::packageVersion("locusPackRat")),
+    error = function(e) "dev"
+  )
+
+  # Build summary content
+  summary_lines <- c(
+    "locusPackRat Output Summary",
+    paste(rep("=", 30), collapse = ""),
+    "",
+    paste("Generated:", format(Sys.time(), "%Y-%m-%d %H:%M:%S")),
+    paste("Package version:", pkg_version),
+    "",
+    "Sheets in this workbook:",
+    paste(rep("-", 25), collapse = "")
+  )
+
+  # Add sheet info
+  for (sheet_name in names(sheets_info)) {
+    n_rows <- sheets_info[[sheet_name]]
+    summary_lines <- c(summary_lines, sprintf("  %s: %d rows", sheet_name, n_rows))
+  }
+
+  summary_lines <- c(summary_lines, "", "Formatting Legend:", paste(rep("-", 25), collapse = ""))
+  summary_lines <- c(summary_lines,
+    "  Yellow highlight: genes matching highlight criteria",
+    "  Striped rows: alternating for readability",
+    "  Scientific notation: p-values and FDR columns",
+    "  Decimal format: fold change columns",
+    "  Thousands separator: genomic coordinates"
+  )
+
+  if (!is.null(filter_expr)) {
+    summary_lines <- c(summary_lines, "", "Filter applied:", paste(" ", filter_expr))
+  }
+
+  # Write summary content
+  summary_df <- data.frame(Summary = summary_lines, stringsAsFactors = FALSE)
+  openxlsx::writeData(wb, sheet = "Summary", x = summary_df, colNames = FALSE)
+
+  # Style the title
+  title_style <- openxlsx::createStyle(
+    fontSize = 14,
+    textDecoration = "bold",
+    fontColour = "#1F4E79"
+  )
+  openxlsx::addStyle(wb, sheet = "Summary", style = title_style, rows = 1, cols = 1)
+
+  # Set column width for readability
+  openxlsx::setColWidths(wb, sheet = "Summary", cols = 1, widths = 50)
+}
+
+#' Create Phenotypes Detail Sheet from MouseMine Data
+#' @noRd
+.createPhenotypesDetailSheet <- function(wb, data, header_style, merge_repeated = FALSE) {
+  # Check for mouseMine phenotype columns
+  phenotype_cols <- c("mm_phenotype", "phenotype")
+  pheno_col <- intersect(phenotype_cols, names(data))[1]
+
+  if (is.na(pheno_col) || !pheno_col %in% names(data)) {
+    return(wb)
+  }
+
+  # Only proceed if we have semicolon-separated values
+  has_multi <- any(grepl(";", data[[pheno_col]], fixed = TRUE), na.rm = TRUE)
+  if (!has_multi) {
+    return(wb)
+  }
+
+  message("  Creating Phenotypes_Detail sheet...")
+
+  # Identify related columns to explode together
+  # Include from_region if present (region mode)
+  possible_cols <- c("gene_symbol", "from_region", "mm_mp_id", "mp_id",
+                     "mm_phenotype", "phenotype", "mm_pubmed_id", "pubmed_id",
+                     "mm_description", "description")
+  cols_present <- intersect(possible_cols, names(data))
+
+  if (length(cols_present) < 2) {
+    return(wb)
+  }
+
+  # Extract relevant columns
+  detail_data <- data[, cols_present, with = FALSE]
+  detail_data <- unique(detail_data)
+
+  # Explode semicolon-separated values
+  result_list <- list()
+
+  for (i in seq_len(nrow(detail_data))) {
+    row <- detail_data[i]
+
+    # Skip if phenotype is NA or empty
+    if (is.na(row[[pheno_col]]) || row[[pheno_col]] == "") {
+      next
+    }
+
+    # Split phenotype column (primary)
+    pheno_vals <- trimws(unlist(strsplit(row[[pheno_col]], ";", fixed = TRUE)))
+    pheno_vals <- pheno_vals[pheno_vals != ""]
+
+    n_vals <- length(pheno_vals)
+    if (n_vals == 0) next
+
+    # Create expanded rows
+    expanded <- data.table(gene_symbol = rep(row$gene_symbol, n_vals))
+
+    # Add from_region if present (region mode)
+    if ("from_region" %in% cols_present && !is.na(row$from_region)) {
+      expanded[["from_region"]] <- rep(row$from_region, n_vals)
+    }
+
+    # Add phenotype
+    expanded[[pheno_col]] <- pheno_vals
+
+    # Handle mp_id column (may have fewer values)
+    mp_col <- intersect(c("mm_mp_id", "mp_id"), cols_present)[1]
+    if (!is.na(mp_col)) {
+      mp_vals <- if (!is.na(row[[mp_col]])) {
+        trimws(unlist(strsplit(row[[mp_col]], ";", fixed = TRUE)))
+      } else {
+        NA_character_
+      }
+      # Recycle to match length
+      expanded[[mp_col]] <- rep_len(mp_vals, n_vals)
+    }
+
+    # Handle pubmed_id column
+    pub_col <- intersect(c("mm_pubmed_id", "pubmed_id"), cols_present)[1]
+    if (!is.na(pub_col)) {
+      pub_vals <- if (!is.na(row[[pub_col]])) {
+        trimws(unlist(strsplit(as.character(row[[pub_col]]), ";", fixed = TRUE)))
+      } else {
+        NA_character_
+      }
+      expanded[[pub_col]] <- rep_len(pub_vals, n_vals)
+    }
+
+    # Handle description column
+    desc_col <- intersect(c("mm_description", "description"), cols_present)[1]
+    if (!is.na(desc_col)) {
+      desc_vals <- if (!is.na(row[[desc_col]])) {
+        trimws(unlist(strsplit(row[[desc_col]], ";", fixed = TRUE)))
+      } else {
+        NA_character_
+      }
+      expanded[[desc_col]] <- rep_len(desc_vals, n_vals)
+    }
+
+    result_list[[i]] <- expanded
+  }
+
+  if (length(result_list) == 0) {
+    return(wb)
+  }
+
+  detail_result <- rbindlist(result_list, fill = TRUE)
+  detail_result <- unique(detail_result)
+
+  # Filter: remove rows where only gene_symbol has a value
+  non_gene_cols <- setdiff(names(detail_result), "gene_symbol")
+  if (length(non_gene_cols) > 0) {
+    has_data <- rowSums(!is.na(detail_result[, non_gene_cols, with = FALSE]) &
+                        detail_result[, non_gene_cols, with = FALSE] != "") > 0
+    detail_result <- detail_result[has_data]
+  }
+
+  if (nrow(detail_result) == 0) {
+    return(wb)
+  }
+
+  # Sort by gene_symbol for better grouping
+  detail_result <- detail_result[order(gene_symbol)]
+
+  # Add worksheet (use writeData instead of writeDataTable if merging)
+  openxlsx::addWorksheet(wb, "Phenotypes_Detail")
+
+  # Style for gene_symbol column: bold, centered vert+horiz
+  gene_symbol_style <- openxlsx::createStyle(
+    textDecoration = "bold",
+    halign = "center",
+    valign = "center"
+  )
+
+  # Border styles for group boundaries
+  top_border_style <- openxlsx::createStyle(border = "top", borderStyle = "thin")
+  bottom_border_style <- openxlsx::createStyle(border = "bottom", borderStyle = "thin")
+
+  if (merge_repeated) {
+    # Write without table format for merging
+    openxlsx::writeData(wb, sheet = "Phenotypes_Detail", x = detail_result,
+                        headerStyle = header_style)
+
+    # Find gene_symbol column index
+    gene_col_idx <- which(names(detail_result) == "gene_symbol")
+
+    if (length(gene_col_idx) > 0) {
+      # Merge consecutive cells with same gene_symbol
+      merge_style <- openxlsx::createStyle(
+        textDecoration = "bold",
+        valign = "center",
+        halign = "center"
+      )
+      genes <- detail_result$gene_symbol
+      start_row <- 2
+      current_gene <- genes[1]
+
+      for (row_idx in 2:length(genes)) {
+        if (genes[row_idx] != current_gene || row_idx == length(genes)) {
+          end_row <- if (genes[row_idx] != current_gene) row_idx else row_idx + 1
+          if (end_row - start_row > 1) {
+            openxlsx::mergeCells(wb, sheet = "Phenotypes_Detail",
+                                 cols = gene_col_idx, rows = start_row:end_row)
+            openxlsx::addStyle(wb, sheet = "Phenotypes_Detail", style = merge_style,
+                               rows = start_row, cols = gene_col_idx)
+          }
+          # Add borders around gene groups
+          openxlsx::addStyle(wb, sheet = "Phenotypes_Detail", style = top_border_style,
+                             rows = start_row, cols = 1:ncol(detail_result), stack = TRUE)
+          openxlsx::addStyle(wb, sheet = "Phenotypes_Detail", style = bottom_border_style,
+                             rows = end_row, cols = 1:ncol(detail_result), stack = TRUE)
+          start_row <- row_idx + 1
+          current_gene <- genes[row_idx]
+        }
+      }
+    }
+
+    # Add filter manually
+    openxlsx::addFilter(wb, sheet = "Phenotypes_Detail", rows = 1, cols = 1:ncol(detail_result))
+  } else {
+    openxlsx::writeDataTable(wb, sheet = "Phenotypes_Detail", x = detail_result,
+                             tableName = "Phenotypes_Detail", withFilter = TRUE,
+                             tableStyle = "TableStyleLight9")
+
+    # Find gene_symbol column index and apply styling + borders
+    gene_col_idx <- which(names(detail_result) == "gene_symbol")
+
+    if (length(gene_col_idx) > 0 && nrow(detail_result) > 0) {
+      # Apply bold centered style to all gene_symbol cells
+      openxlsx::addStyle(wb, sheet = "Phenotypes_Detail", style = gene_symbol_style,
+                         rows = 2:(nrow(detail_result) + 1), cols = gene_col_idx, stack = TRUE)
+
+      # Add borders around gene groups
+      genes <- detail_result$gene_symbol
+      group_start <- 2  # First data row (1 is header)
+
+      for (row_idx in seq_along(genes)) {
+        is_last <- (row_idx == length(genes))
+        is_boundary <- is_last || (genes[row_idx] != genes[row_idx + 1])
+
+        if (is_boundary) {
+          data_row <- row_idx + 1  # +1 for header row
+          # Top border on first row of group
+          openxlsx::addStyle(wb, sheet = "Phenotypes_Detail", style = top_border_style,
+                             rows = group_start, cols = 1:ncol(detail_result), stack = TRUE)
+          # Bottom border on last row of group
+          openxlsx::addStyle(wb, sheet = "Phenotypes_Detail", style = bottom_border_style,
+                             rows = data_row, cols = 1:ncol(detail_result), stack = TRUE)
+          group_start <- data_row + 1
+        }
+      }
+    }
+  }
+
+  openxlsx::addStyle(wb, sheet = "Phenotypes_Detail", style = header_style,
+                     rows = 1, cols = 1:ncol(detail_result), stack = TRUE)
+  openxlsx::setColWidths(wb, sheet = "Phenotypes_Detail", cols = 1:ncol(detail_result), widths = "auto")
+  openxlsx::freezePane(wb, sheet = "Phenotypes_Detail", firstActiveRow = 2)
+
+  return(wb)
+}
+
+#' Create Diseases Detail Sheet from OpenTargets Data
+#' @noRd
+.createDiseasesDetailSheet <- function(wb, data, header_style) {
+  # Check for OpenTargets disease columns (with or without prefix)
+  disease_cols <- c("otd_disease_name", "disease_name")
+  disease_col <- intersect(disease_cols, names(data))[1]
+
+  if (is.na(disease_col) || !disease_col %in% names(data)) {
+    return(wb)
+  }
+
+  # Only proceed if we have semicolon-separated values
+  has_multi <- any(grepl(";", data[[disease_col]], fixed = TRUE), na.rm = TRUE)
+  if (!has_multi) {
+    return(wb)
+  }
+
+  message("  Creating Diseases_Detail sheet...")
+
+  # Identify related columns to explode together
+  # Include from_region if present (region mode)
+  possible_cols <- c("gene_symbol", "from_region", "otd_disease_id", "disease_id",
+                     "otd_disease_name", "disease_name", "otd_score", "score")
+  cols_present <- intersect(possible_cols, names(data))
+
+  if (length(cols_present) < 2) {
+    return(wb)
+  }
+
+  # Extract relevant columns
+  detail_data <- data[, cols_present, with = FALSE]
+  detail_data <- unique(detail_data)
+
+  # Explode semicolon-separated values
+  result_list <- list()
+
+  for (i in seq_len(nrow(detail_data))) {
+    row <- detail_data[i]
+
+    # Skip if disease_name is NA or empty
+    if (is.na(row[[disease_col]]) || row[[disease_col]] == "") {
+      next
+    }
+
+    # Split disease_name column (primary)
+    disease_vals <- trimws(unlist(strsplit(row[[disease_col]], ";", fixed = TRUE)))
+    disease_vals <- disease_vals[disease_vals != ""]
+
+    n_vals <- length(disease_vals)
+    if (n_vals == 0) next
+
+    # Create expanded rows
+    expanded <- data.table(gene_symbol = rep(row$gene_symbol, n_vals))
+
+    # Add from_region if present (region mode)
+    if ("from_region" %in% cols_present && !is.na(row$from_region)) {
+      expanded[["from_region"]] <- rep(row$from_region, n_vals)
+    }
+
+    # Add disease_name
+    expanded[[disease_col]] <- disease_vals
+
+    # Handle disease_id column (may have fewer values)
+    id_col <- intersect(c("otd_disease_id", "disease_id"), cols_present)[1]
+    if (!is.na(id_col)) {
+      id_vals <- if (!is.na(row[[id_col]])) {
+        trimws(unlist(strsplit(row[[id_col]], ";", fixed = TRUE)))
+      } else {
+        NA_character_
+      }
+      # Recycle to match length
+      expanded[[id_col]] <- rep_len(id_vals, n_vals)
+    }
+
+    # Handle score column
+    score_col <- intersect(c("otd_score", "score"), cols_present)[1]
+    if (!is.na(score_col)) {
+      score_vals <- if (!is.na(row[[score_col]])) {
+        trimws(unlist(strsplit(as.character(row[[score_col]]), ";", fixed = TRUE)))
+      } else {
+        NA_character_
+      }
+      # Try to convert to numeric
+      score_numeric <- suppressWarnings(as.numeric(score_vals))
+      expanded[[score_col]] <- rep_len(score_numeric, n_vals)
+    }
+
+    result_list[[i]] <- expanded
+  }
+
+  if (length(result_list) == 0) {
+    return(wb)
+  }
+
+  detail_result <- rbindlist(result_list, fill = TRUE)
+  detail_result <- unique(detail_result)
+
+  # Filter: remove rows where only gene_symbol has a value
+  non_gene_cols <- setdiff(names(detail_result), "gene_symbol")
+  if (length(non_gene_cols) > 0) {
+    has_data <- rowSums(!is.na(detail_result[, non_gene_cols, with = FALSE]) &
+                        detail_result[, non_gene_cols, with = FALSE] != "") > 0
+    detail_result <- detail_result[has_data]
+  }
+
+  if (nrow(detail_result) == 0) {
+    return(wb)
+  }
+
+  # Sort by gene_symbol for better grouping
+  detail_result <- detail_result[order(gene_symbol)]
+
+  # Add worksheet
+  openxlsx::addWorksheet(wb, "Diseases_Detail")
+
+  # Style for gene_symbol column: bold, centered vert+horiz
+  gene_symbol_style <- openxlsx::createStyle(
+    textDecoration = "bold",
+    halign = "center",
+    valign = "center"
+  )
+
+  # Border styles for group boundaries
+  top_border_style <- openxlsx::createStyle(border = "top", borderStyle = "thin")
+  bottom_border_style <- openxlsx::createStyle(border = "bottom", borderStyle = "thin")
+
+  openxlsx::writeDataTable(wb, sheet = "Diseases_Detail", x = detail_result,
+                           tableName = "Diseases_Detail", withFilter = TRUE,
+                           tableStyle = "TableStyleLight9")
+
+  # Find gene_symbol column index and apply styling + borders
+  gene_col_idx <- which(names(detail_result) == "gene_symbol")
+
+  if (length(gene_col_idx) > 0 && nrow(detail_result) > 0) {
+    # Apply bold centered style to all gene_symbol cells
+    openxlsx::addStyle(wb, sheet = "Diseases_Detail", style = gene_symbol_style,
+                       rows = 2:(nrow(detail_result) + 1), cols = gene_col_idx, stack = TRUE)
+
+    # Add borders around gene groups
+    genes <- detail_result$gene_symbol
+    group_start <- 2  # First data row (1 is header)
+
+    for (row_idx in seq_along(genes)) {
+      is_last <- (row_idx == length(genes))
+      is_boundary <- is_last || (genes[row_idx] != genes[row_idx + 1])
+
+      if (is_boundary) {
+        data_row <- row_idx + 1  # +1 for header row
+        # Top border on first row of group
+        openxlsx::addStyle(wb, sheet = "Diseases_Detail", style = top_border_style,
+                           rows = group_start, cols = 1:ncol(detail_result), stack = TRUE)
+        # Bottom border on last row of group
+        openxlsx::addStyle(wb, sheet = "Diseases_Detail", style = bottom_border_style,
+                           rows = data_row, cols = 1:ncol(detail_result), stack = TRUE)
+        group_start <- data_row + 1
+      }
+    }
+  }
+
+  openxlsx::addStyle(wb, sheet = "Diseases_Detail", style = header_style,
+                     rows = 1, cols = 1:ncol(detail_result), stack = TRUE)
+  openxlsx::setColWidths(wb, sheet = "Diseases_Detail", cols = 1:ncol(detail_result), widths = "auto")
+  openxlsx::freezePane(wb, sheet = "Diseases_Detail", firstActiveRow = 2)
+
+  return(wb)
+}
+
+#' Create Regions Summary Sheet
+#' @noRd
+.createRegionsSheet <- function(wb, data, header_style) {
+  # Check if this is region mode data
+  region_cols <- c("region_id", "region_chr", "region_start", "region_end", "genes", "overlap_types", "from_region")
+  present_cols <- intersect(region_cols, names(data))
+
+  if (length(present_cols) < 3) {
+    return(list(wb = wb, data = data))
+  }
+
+  message("  Creating Regions sheet...")
+
+  # Extract unique region data
+  # Include any user columns that might be at region level (e.g., peak_id, max_lod)
+  key_cols <- c("region_id", "from_region")
+  key_col <- intersect(key_cols, names(data))[1]
+
+  if (is.na(key_col)) {
+    return(list(wb = wb, data = data))
+  }
+
+  # Get all columns that have same value per region
+  region_level_cols <- c()
+  for (col in names(data)) {
+    if (col == "gene_symbol") next
+    # Check if column is constant within each region
+    test <- data[, .(n_unique = uniqueN(get(col))), by = key_col]
+    if (all(test$n_unique <= 1, na.rm = TRUE)) {
+      region_level_cols <- c(region_level_cols, col)
+    }
+  }
+
+  # Create regions summary
+  if (length(region_level_cols) > 0) {
+    regions_data <- unique(data[, region_level_cols, with = FALSE])
+
+    # Add worksheet
+    openxlsx::addWorksheet(wb, "Regions")
+    openxlsx::writeDataTable(wb, sheet = "Regions", x = regions_data,
+                             tableName = "Regions", withFilter = TRUE,
+                             tableStyle = "TableStyleLight9")
+    openxlsx::addStyle(wb, sheet = "Regions", style = header_style,
+                       rows = 1, cols = 1:ncol(regions_data), stack = TRUE)
+
+    # Auto-wrap columns with long content (> 50 chars)
+    wrap_style <- openxlsx::createStyle(wrapText = TRUE, valign = "top")
+    for (col_idx in seq_along(names(regions_data))) {
+      col_data <- regions_data[[col_idx]]
+      if (is.character(col_data)) {
+        max_len <- max(nchar(col_data), na.rm = TRUE)
+        if (!is.na(max_len) && max_len > 50) {
+          # Apply wrap to all data rows in this column
+          openxlsx::addStyle(wb, sheet = "Regions", style = wrap_style,
+                             rows = 2:(nrow(regions_data) + 1), cols = col_idx, stack = TRUE)
+          # Set column width to 40 for wrapped columns
+          openxlsx::setColWidths(wb, sheet = "Regions", cols = col_idx, widths = 40)
+        } else {
+          openxlsx::setColWidths(wb, sheet = "Regions", cols = col_idx, widths = "auto")
+        }
+      } else {
+        openxlsx::setColWidths(wb, sheet = "Regions", cols = col_idx, widths = "auto")
+      }
+    }
+
+    openxlsx::freezePane(wb, sheet = "Regions", firstActiveRow = 2)
+  }
+
+  # Remove redundant columns from main data (keep from_region as reference)
+  cols_to_remove <- setdiff(present_cols, c("from_region"))
+  data_cleaned <- data[, !names(data) %in% cols_to_remove, with = FALSE]
+
+  return(list(wb = wb, data = data_cleaned))
+}
+
+#' Create Formatted Excel Workbook
 #' @noRd
 .createFormattedExcel <- function(data, highlight_genes, highlight_expr,
-                                  highlight_color, split_by, split_criteria) {
-  
+                                  highlight_color, split_by, split_criteria,
+                                  format_numbers = TRUE, format_pvalues = TRUE,
+                                  format_coordinates = TRUE, include_summary = TRUE,
+                                  header_color = "#4472C4", min_col_width = 10,
+                                  filter_expr = NULL, merge_repeated = FALSE) {
+
   wb <- openxlsx::createWorkbook()
-  header_style <- openxlsx::createStyle(textDecoration = "bold", halign = "center", border = "bottom", borderStyle = "medium")
+
+  # Create styles
+  header_style <- openxlsx::createStyle(
+    textDecoration = "bold",
+    fontColour = "#FFFFFF",
+    fgFill = header_color,
+    halign = "center",
+    valign = "center",
+    border = "bottom",
+    borderStyle = "medium",
+    wrapText = TRUE
+  )
   highlight_style <- openxlsx::createStyle(fgFill = highlight_color)
   stripe_style <- openxlsx::createStyle(fgFill = "#F0F0F0")
-  
+
+  # Number format styles
+  scientific_style <- openxlsx::createStyle(numFmt = "0.00E+00")
+  decimal2_style <- openxlsx::createStyle(numFmt = "0.00")
+  thousands_style <- openxlsx::createStyle(numFmt = "#,##0")
+  percent_style <- openxlsx::createStyle(numFmt = "0.0%")
+
+  # Store original data for detail sheets before cleaning
+  original_data <- copy(data)
+
+  # Handle region mode: create Regions sheet and clean data
+  regions_result <- .createRegionsSheet(wb, data, header_style)
+  wb <- regions_result$wb
+  data <- regions_result$data
+
   # Determine sheets
   sheets <- list()
-  
+
   if (split_by == "none") {
     sheets[["All Genes"]] <- data
   } else if (split_by == "chromosome") {
@@ -1283,46 +1924,129 @@ makeGeneSheet <- function(filter_expr = NULL,
     for (tab_name in names(split_criteria)) {
       f_expr <- split_criteria[[tab_name]]
       tryCatch({
-        # Verify columns exist before eval
-        # Note: eval might still fail if logic is wrong, but Object Not Found is usually missing cols.
         filtered <- data[eval(parse(text = f_expr))]
         sheets[[tab_name]] <- filtered
       }, error = function(e) {
-        # Detailed warning
         warning(sprintf("Skipping tab '%s': %s", tab_name, e$message))
       })
     }
   }
-  
+
+  # Track sheet row counts for summary
+  sheets_info <- list()
+
   for (sheet_name in names(sheets)) {
     sheet_data <- sheets[[sheet_name]]
     if (nrow(sheet_data) == 0) next
-    
+
+    sheets_info[[sheet_name]] <- nrow(sheet_data)
+
     openxlsx::addWorksheet(wb, sheet_name)
-    openxlsx::writeDataTable(wb, sheet = sheet_name, x = sheet_data, tableName = gsub("[^A-Za-z0-9]", "_", sheet_name), withFilter = TRUE)
-    openxlsx::addStyle(wb, sheet = sheet_name, style = header_style, rows = 1, cols = 1:ncol(sheet_data))
-    
+    openxlsx::writeDataTable(
+      wb,
+      sheet = sheet_name,
+      x = sheet_data,
+      tableName = gsub("[^A-Za-z0-9]", "_", sheet_name),
+      withFilter = TRUE,
+      tableStyle = "TableStyleLight9"
+    )
+
+    # Apply header style
+    openxlsx::addStyle(wb, sheet = sheet_name, style = header_style,
+                       rows = 1, cols = 1:ncol(sheet_data), stack = TRUE)
+
+    # Apply striped rows
     if (nrow(sheet_data) > 0) {
-      rows <- seq(2, nrow(sheet_data) + 1, by = 2)
-      openxlsx::addStyle(wb, sheet = sheet_name, style = stripe_style, rows = rows, cols = 1:ncol(sheet_data), gridExpand = TRUE)
+      rows <- seq(3, nrow(sheet_data) + 1, by = 2)
+      if (length(rows) > 0) {
+        openxlsx::addStyle(wb, sheet = sheet_name, style = stripe_style,
+                           rows = rows, cols = 1:ncol(sheet_data), gridExpand = TRUE, stack = TRUE)
+      }
     }
-    
+
+    # Apply number formatting per column
+    if (format_numbers) {
+      for (col_idx in seq_along(names(sheet_data))) {
+        col_name <- names(sheet_data)[col_idx]
+        col_data <- sheet_data[[col_name]]
+
+        # Only format numeric columns
+        if (!is.numeric(col_data)) next
+
+        fmt <- .detectColumnFormat(col_name, col_data)
+
+        style_to_apply <- switch(fmt,
+          "scientific" = if (format_pvalues) scientific_style else NULL,
+          "decimal2" = decimal2_style,
+          "thousands" = if (format_coordinates) thousands_style else NULL,
+          "percent" = percent_style,
+          NULL
+        )
+
+        if (!is.null(style_to_apply)) {
+          data_rows <- 2:(nrow(sheet_data) + 1)
+          openxlsx::addStyle(wb, sheet = sheet_name, style = style_to_apply,
+                             rows = data_rows, cols = col_idx, stack = TRUE)
+        }
+      }
+    }
+
+    # Apply highlighting
     rows_to_hl <- c()
     if (!is.null(highlight_genes) && "gene_symbol" %in% names(sheet_data)) {
       rows_to_hl <- which(sheet_data$gene_symbol %in% highlight_genes) + 1
     }
     if (!is.null(highlight_expr)) {
-      try({
+      tryCatch({
         expr_rows <- which(sheet_data[, eval(parse(text = highlight_expr))]) + 1
         rows_to_hl <- unique(c(rows_to_hl, expr_rows))
-      }, silent = TRUE)
+      }, error = function(e) NULL)
     }
     if (length(rows_to_hl) > 0) {
-      openxlsx::addStyle(wb, sheet = sheet_name, style = highlight_style, rows = rows_to_hl, cols = 1:ncol(sheet_data), gridExpand = TRUE)
+      openxlsx::addStyle(wb, sheet = sheet_name, style = highlight_style,
+                         rows = rows_to_hl, cols = 1:ncol(sheet_data), gridExpand = TRUE, stack = TRUE)
     }
-    
-    openxlsx::setColWidths(wb, sheet = sheet_name, cols = 1:ncol(sheet_data), widths = "auto")
+
+    # Set smart column widths
+    col_widths <- sapply(seq_along(names(sheet_data)), function(i) {
+      .calculateColumnWidth(names(sheet_data)[i], sheet_data[[i]], min_width = min_col_width)
+    })
+    openxlsx::setColWidths(wb, sheet = sheet_name, cols = 1:ncol(sheet_data), widths = col_widths)
+
+    # Freeze header row
     openxlsx::freezePane(wb, sheet = sheet_name, firstActiveRow = 2)
   }
+
+  # Add phenotypes detail sheet if mouseMine data present
+  wb <- .createPhenotypesDetailSheet(wb, original_data, header_style, merge_repeated)
+
+  # Add diseases detail sheet if OpenTargets data present
+  wb <- .createDiseasesDetailSheet(wb, original_data, header_style)
+
+  # Update sheets_info to include Regions, Phenotypes_Detail, and Diseases_Detail if created
+  all_sheets <- openxlsx::sheets(wb)
+  if ("Regions" %in% all_sheets) {
+    # Get row count from Regions sheet
+    regions_nrow <- nrow(openxlsx::readWorkbook(wb, sheet = "Regions"))
+    sheets_info <- c(list(Regions = regions_nrow), sheets_info)
+  }
+  if ("Phenotypes_Detail" %in% all_sheets) {
+    # Get row count from Phenotypes_Detail sheet
+    pheno_nrow <- nrow(openxlsx::readWorkbook(wb, sheet = "Phenotypes_Detail"))
+    sheets_info[["Phenotypes_Detail"]] <- pheno_nrow
+  }
+  if ("Diseases_Detail" %in% all_sheets) {
+    # Get row count from Diseases_Detail sheet
+    diseases_nrow <- nrow(openxlsx::readWorkbook(wb, sheet = "Diseases_Detail"))
+    sheets_info[["Diseases_Detail"]] <- diseases_nrow
+  }
+
+  # Add summary sheet (at the beginning)
+  if (include_summary && length(sheets_info) > 0) {
+    .createSummarySheet(wb, sheets_info, filter_expr)
+    # Move summary sheet to first position
+    openxlsx::worksheetOrder(wb) <- c(length(openxlsx::sheets(wb)), 1:(length(openxlsx::sheets(wb)) - 1))
+  }
+
   return(wb)
 }
