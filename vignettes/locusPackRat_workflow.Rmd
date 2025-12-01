@@ -302,35 +302,61 @@ addRatTable(
 
 ```
 
-### Add mouseMine and Open Targets data
+## Add mouseMine and Open Targets data
 
 ```{r add_mouseMine_and_Open_Targets_data_QTL}
 queryMouseMine(project_dir = "qtl_analysis")
 queryOpenTargets(project_dir = "qtl_analysis") 
 ```
 
-### Examine Package Structure Before Creating Output
+## Examine Package Structure Before Creating Outputs
 
 ```{r gene_examine_package_QTL}
 listPackRatTables(project_dir = "qtl_analysis",fullInfo = T)
 
 ```
 
+## Generate Locus Plot
+
+```{r generate_QTL_plot}
+generateLocusZoomPlot(
+     region_id="region_1",
+     project_dir="qtl_analysis",
+     scan_table="QTL results",
+     signal_table="founder info",
+     width=10,
+     height=6,
+     threshold=4,
+     layout_ratios = c(manhattan = 0.35, signal = 0.40, genes = 0.25))
+
+```
+
+##Generate Excel Sheet
+
+Additional sheets can be created from any boolean (True/False) argument.
+Boolean statements in R can be strung together with & (and) or | (or).
+We recommend examining the package structure above with fullInfo = T to identify column names.
+
+For Region-based packages, one likely does not wish to include all region-based information in the output (for example, the LoD scores from the genome scan itself).  See below how to use include_supplementary to include only the tables you desire
+
+Note: beware of capitalization.  For some reason mouseMine does not capitalize any terms other than gene names, while OpenTargets is somewhat inconsistent.  If needed, more complex arguments e.g. grepl("[c|C]ardiac",mm_phenotype) & padj <.001 may be used.
+
+Note 2:  If two supplemental tables share a column name, the code will append the table's abbreviation to the column name: (e.g. if the table abbreviation is 'ab' and the column is 'value', it will become 'ab_value').  It is also possible to set the prefix_mode argument below to "abbreviated", in which case all columns from tables with an abbreviation will have it appended by default.
+
 ```{r generate_region_excels_QTL}
 # Peak-centric analysis workbook
 makeGeneSheet(
   format = "excel",
   output_file = "qtl_analysis.xlsx",
-  split_by = "none",
+  prefix_mode = "abbreviated",
+  split_by = "criteria",
   split_criteria = list(
-    "All_Peaks" = "TRUE",
-    "High_Enrichment" = "fold_enrichment > 20",
-    "Promoter_Peaks" = "peak_type == 'promoter'",
-    "Enhancer_Peaks" = "peak_type == 'enhancer'",
-    "Active_Chromatin" = "state %in% c('Active_Promoter', 'Strong_Enhancer')",
-    "Differential" = "significant == TRUE & abs(log2FC) > 1"
+    "All_Results" = "TRUE",
+    "Chr 3 Peak" = "peak_id == 'Significant_1'",
+    "Mouse_Phenotype" = "grepl('[c|C]ardiac',mm_phenotype) | grepl('[h|H]eart',mm_phenotype) ",
+    "Sig OTC" = "(otc_score>1 | otc_score< -1) & peak_id == 'Significant_1'"
   ),
-  include_supplementary = TRUE,
+  include_supplementary = c("mouse_phenotypes","NS_SNP information","ot_constraints","ot_diseases","ot_tractability"),
   project_dir = "qtl_analysis"
 )
 
@@ -478,6 +504,16 @@ listPackRatTables(project_dir = "atacseq_analysis",fullInfo = T)
 ```
 
 ## Generate Region Analysis Workbooks
+
+Additional sheets can be created from any boolean (True/False) argument.
+Boolean statements in R can be strung together with & (and) or | (or).
+We recommend examining the package structure above with fullInfo = T to identify column names.
+
+For Region-based packages, one likely does not wish to include all region-based information in the output (for example, the LoD scores from the genome scan itself).  See below how to use include_supplementary to include only the tables you desire
+
+Note: beware of capitalization.  For some reason mouseMine does not capitalize any terms other than gene names, while OpenTargets is somewhat inconsistent.  If needed, more complex arguments e.g. grepl("[c|C]ardiac",mm_phenotype) & padj <.001 may be used.
+
+Note 2:  If two supplemental tables share a column name, the code will append the table's abbreviation to the column name: (e.g. if the table abbreviation is 'ab' and the column is 'value', it will become 'ab_value').  It is also possible to set the prefix_mode argument below to "abbreviated", in which case all columns from tables with an abbreviation will have it appended by default.
 
 ```{r generate_region_excels}
 # Peak-centric analysis workbook
