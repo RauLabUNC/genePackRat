@@ -28,12 +28,14 @@ initPackRat <- function(data,
                        genome = c("hg38", "hg19", "mm39", "mm10"),
                        project_dir = ".",
                        keep_pseudo = FALSE,
+                       overlap_mode = c("any", "complete"),
                        force = FALSE) {
 
   # Validate inputs
   mode <- match.arg(mode)
   species <- match.arg(species)
   genome <- match.arg(genome)
+  overlap_mode <- match.arg(overlap_mode)
 
   # Check species/genome compatibility
   if ((species == "human" && genome %in% c("mm10", "mm39")) ||
@@ -75,7 +77,7 @@ initPackRat <- function(data,
     output_file <- file.path(packrat_dir, "input", "genes.csv")
   } else {
     message("Processing region list...")
-    processed_data <- .processRegionInput(data, species, genome,keep_pseudo)
+    processed_data <- .processRegionInput(data, species, genome, keep_pseudo, overlap_mode)
     output_file <- file.path(packrat_dir, "input", "regions.csv")
   }
 
@@ -105,6 +107,7 @@ initPackRat <- function(data,
     mode = mode,
     species = species,
     genome = genome,
+    overlap_mode = if (mode == "region") overlap_mode else NULL,
     initialization_date = Sys.Date(),
     package_version = as.character(pkg_version),
     input_columns = names(processed_data),
@@ -288,6 +291,56 @@ addRatTable <- function(data,
   invisible(TRUE)
 }
 
+#' Remove a Supplementary Table from locusPackRat Project
+#'
+#' Removes a supplementary table and its metadata from a project
+#'
+#' @param table_name Character: Name of the supplementary table to remove
+#' @param project_dir Character: Path to project directory (default: ".")
+#'
+#' @return Invisible TRUE on success
+#'
+#' @importFrom jsonlite read_json write_json
+#'
+#' @export
+removeRatTable <- function(table_name, project_dir = ".") {
+  # Validate project exists
+
+  packrat_dir <- file.path(project_dir, ".locusPackRat")
+  if (!dir.exists(packrat_dir)) {
+    stop("No .locusPackRat directory found. Run initPackRat() first.")
+  }
+
+  # Read config
+  config_file <- file.path(packrat_dir, "config.json")
+  if (!file.exists(config_file)) {
+    stop("Config file not found. Project may be corrupted.")
+  }
+  config <- jsonlite::read_json(config_file)
+
+  # Check table exists in config
+  if (is.null(config$supplementary_tables[[table_name]])) {
+    stop(sprintf("Table '%s' not found in project. Available tables: %s",
+                 table_name,
+                 paste(names(config$supplementary_tables), collapse = ", ")))
+  }
+
+  # Delete CSV file
+  csv_path <- file.path(packrat_dir, "supplementary", paste0(table_name, ".csv"))
+  if (file.exists(csv_path)) {
+    file.remove(csv_path)
+    message(sprintf("Removed file: %s", csv_path))
+  } else {
+    warning(sprintf("CSV file not found: %s", csv_path))
+  }
+
+  # Remove entry from config
+  config$supplementary_tables[[table_name]] <- NULL
+  jsonlite::write_json(config, config_file, pretty = TRUE, auto_unbox = TRUE)
+  message(sprintf("Removed '%s' from config", table_name))
+
+  invisible(TRUE)
+}
 
 #' List Supplementary Tables in locusPackRat Project
 #'
@@ -474,6 +527,7 @@ makeGeneSheet <- function(filter_expr = NULL,
                           split_by = c("none", "chromosome", "criteria"),
                           split_criteria = NULL,
                           include_supplementary = TRUE,
+                          exclude_tables = NULL,
                           collapse_multiples = TRUE,
                           prefix_mode = c("collision", "abbreviated", "always"),
                           project_dir = ".") {
@@ -495,7 +549,7 @@ makeGeneSheet <- function(filter_expr = NULL,
     if(!"pk_id" %in% names(base_data)) base_data[, pk_id := .I]
   } else {
     region_data <- fread(file.path(packrat_dir, "input", "regions.csv"))
-    base_data <- .expandRegionsToGenes(region_data)
+    base_data <- .expandRegionsToGenes(region_data, config)
     if(!"pk_id" %in% names(base_data)) base_data[, pk_id := .I]
   }
 
@@ -534,6 +588,14 @@ makeGeneSheet <- function(filter_expr = NULL,
         tables_to_include <- intersect(paste0(include_supplementary, ".csv"), all_supp)
       } else {
         tables_to_include <- all_supp
+      }
+
+      # Filter out excluded tables
+      if (!is.null(exclude_tables)) {
+        tables_to_include <- setdiff(tables_to_include, paste0(exclude_tables, ".csv"))
+        if (length(exclude_tables) > 0) {
+          message(sprintf("Excluding tables: %s", paste(exclude_tables, collapse = ", ")))
+        }
       }
 
       for (sf in tables_to_include) {
@@ -791,7 +853,7 @@ makeGeneSheet <- function(filter_expr = NULL,
 
 #' Process Region Input Data
 #' @noRd
-.processRegionInput <- function(data, species, genome,keep_pseudo) {
+.processRegionInput <- function(data, species, genome, keep_pseudo, overlap_mode = "any") {
   # Make a defensive copy to avoid modifying the caller's data
   data <- copy(data)
 
@@ -842,26 +904,51 @@ makeGeneSheet <- function(filter_expr = NULL,
   coords[, start := as.numeric(start)]
   coords[, end := as.numeric(end)]
   coords[, chr := as.character(chr)]
-  
-  # look for overlaps
+
+  # Look for overlaps - capture gene coordinates to determine overlap type
   overlaps <- coords[data,
-                      .(region_id = i.region_id, gene_symbol = x.gene_symbol), 
+                      .(region_id = i.region_id,
+                        region_start = i.start,
+                        region_end = i.end,
+                        gene_symbol = x.gene_symbol,
+                        gene_start = x.start,
+                        gene_end = x.end),
                       on = .(chr, start <= end, end >= start),
                       nomatch = NULL]
+
   if (nrow(overlaps) > 0) {
-      
-      # Collapse multiple genes into a single comma-separated string
-      genes_aggregated <- overlaps[, .(genes = paste(unique(gene_symbol), collapse = ", ")),
-                                  by = region_id]
-      
-      # Merge back to the original data
-      data <- merge(data, genes_aggregated, by = "region_id", all.x = TRUE)
-      
+      # Calculate overlap type: complete if gene is entirely within region
+      overlaps[, overlap_type := ifelse(
+        gene_start >= region_start & gene_end <= region_end,
+        "complete",
+        "partial"
+      )]
+
+      # Filter if overlap_mode == "complete"
+      if (overlap_mode == "complete") {
+        overlaps <- overlaps[overlap_type == "complete"]
+      }
+
+      if (nrow(overlaps) > 0) {
+        # Collapse genes and overlap_types into comma-separated strings (in same order)
+        genes_aggregated <- overlaps[, .(
+          genes = paste(unique(gene_symbol), collapse = ", "),
+          overlap_types = paste(overlap_type[!duplicated(gene_symbol)], collapse = ", ")
+        ), by = region_id]
+
+        # Merge back to the original data
+        data <- merge(data, genes_aggregated, by = "region_id", all.x = TRUE)
+      } else {
+        data[, genes := NA_character_]
+        data[, overlap_types := NA_character_]
+      }
+
   } else {
-      # If no overlaps found, create empty column
+      # If no overlaps found, create empty columns
       data[, genes := NA_character_]
+      data[, overlap_types := NA_character_]
   }
-return(data)
+  return(data)
 }
 
 #' Generate Orthology Table
@@ -1052,7 +1139,7 @@ return(data)
 
 #' Expand Regions to Genes
 #' @noRd
-.expandRegionsToGenes <- function(region_data) {
+.expandRegionsToGenes <- function(region_data, config) {
   if (!"genes" %in% names(region_data) || all(is.na(region_data$genes)) || all(region_data$genes == "")) {
     warning("`genes` column is missing or empty, returning empty gene table")
     return(data.table())
@@ -1062,13 +1149,74 @@ return(data)
   # Split comma-separated genes
   genes_list <- strsplit(region_data$genes, ", ")
 
+  # Split overlap_types if present (same order as genes)
+  has_overlap_types <- "overlap_types" %in% names(region_data)
+  if (has_overlap_types) {
+    region_data[, overlap_types := as.character(overlap_types)]
+    overlap_types_list <- strsplit(region_data$overlap_types, ", ")
+  }
+
   # Create expanded table
   result <- region_data[rep(seq_len(nrow(region_data)), lengths(genes_list))]
   result[, gene_symbol := unlist(genes_list)]
   result[, gene_symbol := trimws(gene_symbol)]
 
-  # Add region info
+  # Add overlap_type for each gene
+  if (has_overlap_types) {
+    result[, overlap_type := unlist(overlap_types_list)]
+    result[, overlap_type := trimws(overlap_type)]
+    # Remove the aggregated column
+    result[, overlap_types := NULL]
+  }
+
+  # Add region info and rename region coordinates
   result[, from_region := paste0(chr, ":", start, "-", end)]
+  setnames(result, c("chr", "start", "end"), c("region_chr", "region_start", "region_end"))
+
+  # Load gene-specific coordinates from genome annotation
+  species <- config$species
+  genome <- config$genome
+  coords_file <- NULL
+
+  if (species == "mouse") {
+    if (genome == "mm39") {
+      coords_file <- system.file("extdata", "mouse_coords_mm39.csv", package = "locusPackRat")
+      if (coords_file == "") coords_file <- "tests/test_data/mouse_coords_mm39.csv"
+    } else if (genome == "mm10") {
+      coords_file <- system.file("extdata", "mouse_coords_mm10.csv", package = "locusPackRat")
+      if (coords_file == "") coords_file <- "tests/test_data/mouse_coords_mm10.csv"
+    }
+  } else if (species == "human") {
+    if (genome == "hg38") {
+      coords_file <- system.file("extdata", "human_coords_hg38.csv", package = "locusPackRat")
+      if (coords_file == "") coords_file <- "tests/test_data/human_coords_hg38.csv"
+    } else if (genome == "hg19") {
+      coords_file <- system.file("extdata", "human_coords_hg19.csv", package = "locusPackRat")
+      if (coords_file == "") coords_file <- "tests/test_data/human_coords_hg19.csv"
+    }
+  }
+
+  # Merge with gene coordinates
+  if (!is.null(coords_file) && file.exists(coords_file)) {
+    coords_data <- fread(coords_file)
+    # Keep only the coordinate columns we need
+    coords_cols <- intersect(c("gene_symbol", "chr", "start", "end", "strand", "ensembl_id"), names(coords_data))
+    coords_data <- coords_data[, ..coords_cols]
+
+    result <- merge(result, coords_data, by = "gene_symbol", all.x = TRUE)
+
+    # Ensure numeric coordinates
+    if ("start" %in% names(result)) result[, start := as.integer(start)]
+    if ("end" %in% names(result)) result[, end := as.integer(end)]
+
+    message(sprintf("  Loaded gene coordinates for %d/%d genes", sum(!is.na(result$start)), nrow(result)))
+  } else {
+    message("  Note: Coordinate file not found, gene-level overlap will use region bounds")
+    # Fall back to region coordinates
+    result[, chr := region_chr]
+    result[, start := region_start]
+    result[, end := region_end]
+  }
 
   return(result)
 }

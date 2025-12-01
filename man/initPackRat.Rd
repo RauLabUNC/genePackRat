@@ -11,6 +11,7 @@ initPackRat(
   genome = c("hg38", "hg19", "mm39", "mm10"),
   project_dir = ".",
   keep_pseudo = FALSE,
+  overlap_mode = c("any", "complete"),
   force = FALSE
 )
 }

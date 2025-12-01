@@ -6,5 +6,7 @@ utils::globalVariables(c(
   "..match..", "..ortho_cols", ".I", ".N", ".", "pos", "p_value",
   "lod", "table_name", "chrom", "p", "color", "strain_id", "bp",
   "capture.output", "..founder_cols", "scor", "pk_id", "score",
-  "disease"
+  "disease", "region_chr", "region_start", "region_end", "strand",
+  "..coords_cols", "overlap_type", "overlap_types", "gene_start",
+  "gene_end"
 ))

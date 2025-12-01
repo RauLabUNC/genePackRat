@@ -15,6 +15,7 @@ makeGeneSheet(
   split_by = c("none", "chromosome", "criteria"),
   split_criteria = NULL,
   include_supplementary = TRUE,
+  exclude_tables = NULL,
   collapse_multiples = TRUE,
   prefix_mode = c("collision", "abbreviated", "always"),
   project_dir = "."
