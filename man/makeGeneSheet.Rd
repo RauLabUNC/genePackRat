@@ -43,6 +43,8 @@ makeGeneSheet(
 \item{include_supplementary}{Logical or character vector: TRUE to include all supplementary tables,
 FALSE for none, or character vector of specific table names to include}
 
+\item{exclude_tables}{Character vector: Names of supplementary tables to exclude from output}
+
 \item{collapse_multiples}{Logical: when merging supplementary tables,
 collapse multiple matches per key into a single row by aggregating
 values (e.g. concatenating text). If FALSE, keep all matches as

@@ -9,7 +9,8 @@
 #' @param project_dir Character: Path to project directory (default: current directory)
 #' @param keep_pseudo Logical: If FALSE, removes all gm***** genes from region list.  Does nothing in gene mode
 #' @param force Logical: Overwrite existing .locusPackRat directory if it exists
-#'
+#' @param overlap_mode Character: "any" (default) keeps genes with any overlap,
+#'                      "complete" keeps only genes entirely within regions
 #' @return Invisible TRUE on success
 #'
 #' @note Genome coordinates and orthology mappings are loaded from cached data files
@@ -509,6 +510,7 @@ listPackRatTables <- function(project_dir = ".", fullInfo=FALSE) {
 #'                    "abbreviated" prefixes all columns from tables that have an abbreviation set.
 #'                    "always" prefixes all columns, using table_name as fallback if no abbreviation.
 #' @param project_dir Character: Path to project directory containing .locusPackRat
+#' @param exclude_tables Character vector: Names of supplementary tables to exclude from output
 #'
 #' @return data.table of the gene sheet (invisible)
 #'

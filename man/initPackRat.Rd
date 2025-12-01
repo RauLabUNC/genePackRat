@@ -28,6 +28,9 @@ initPackRat(
 
 \item{keep_pseudo}{Logical: If FALSE, removes all gm***** genes from region list.  Does nothing in gene mode}
 
+\item{overlap_mode}{Character: "any" (default) keeps genes with any overlap,
+"complete" keeps only genes entirely within regions}
+
 \item{force}{Logical: Overwrite existing .locusPackRat directory if it exists}
 }
 \value{

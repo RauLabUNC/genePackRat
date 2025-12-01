@@ -8,5 +8,5 @@ utils::globalVariables(c(
   "capture.output", "..founder_cols", "scor", "pk_id", "score",
   "disease", "region_chr", "region_start", "region_end", "strand",
   "..coords_cols", "overlap_type", "overlap_types", "gene_start",
-  "gene_end"
+  "gene_end", "i.start", "i.end", "x.start", "x.end"
 ))

@@ -1,6 +1,0 @@
-gene_id,snp_id,pvalue,beta,trait
-ENSMUSG00000001,rs123456,1.2e-08,0.34,cardiac_hypertrophy
-ENSMUSG00000003,rs234567,5.4e-06,0.23,heart_weight
-ENSMUSG00000004,rs345678,3.2e-09,-0.45,ejection_fraction
-ENSMUSG00000006,rs456789,8.7e-07,0.18,cardiac_hypertrophy
-ENSMUSG00000008,rs567890,2.1e-10,0.56,heart_failure
