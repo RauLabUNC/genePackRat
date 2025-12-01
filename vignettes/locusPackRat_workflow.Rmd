@@ -337,7 +337,7 @@ Additional sheets can be created from any boolean (True/False) argument.
 Boolean statements in R can be strung together with & (and) or | (or).
 We recommend examining the package structure above with fullInfo = T to identify column names.
 
-For Region-based packages, one likely does not wish to include all region-based information in the output (for example, the LoD scores from the genome scan itself).  See below how to use include_supplementary to include only the tables you desire
+For Region-based packages, one likely does not wish to include all region-based information in the output (for example, the LoD scores from the genome scan itself).  The exclude_tables argument will allow you to exclude these from your output
 
 Note: beware of capitalization.  For some reason mouseMine does not capitalize any terms other than gene names, while OpenTargets is somewhat inconsistent.  If needed, more complex arguments e.g. grepl("[c|C]ardiac",mm_phenotype) & padj <.001 may be used.
 
@@ -356,7 +356,8 @@ makeGeneSheet(
     "Mouse_Phenotype" = "grepl('[c|C]ardiac',mm_phenotype) | grepl('[h|H]eart',mm_phenotype) ",
     "Sig OTC" = "(otc_score>1 | otc_score< -1) & peak_id == 'Significant_1'"
   ),
-  include_supplementary = c("mouse_phenotypes","NS_SNP information","ot_constraints","ot_diseases","ot_tractability"),
+  include_supplementary =  TRUE,
+  exclude_tables=c("founder info","QTL results"),
   project_dir = "qtl_analysis"
 )
 
