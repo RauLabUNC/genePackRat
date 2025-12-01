@@ -1955,8 +1955,8 @@ makeGeneSheet <- function(filter_expr = NULL,
     openxlsx::addStyle(wb, sheet = sheet_name, style = header_style,
                        rows = 1, cols = 1:ncol(sheet_data), stack = TRUE)
 
-    # Apply striped rows
-    if (nrow(sheet_data) > 0) {
+    # Apply striped rows (need at least 2 data rows for stripes to make sense)
+    if (nrow(sheet_data) >= 2) {
       rows <- seq(3, nrow(sheet_data) + 1, by = 2)
       if (length(rows) > 0) {
         openxlsx::addStyle(wb, sheet = sheet_name, style = stripe_style,
