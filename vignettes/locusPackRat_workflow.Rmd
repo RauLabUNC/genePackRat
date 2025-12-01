@@ -168,9 +168,9 @@ queryMouseMine(project_dir = "rnaseq_analysis")
 queryOpenTargets(project_dir = "rnaseq_analysis") 
 ```
 
-### Examine Package Structure Before Creating Output
+## Examine Package Structure Before Creating Outputs
 
-```{r gene_examine_package}
+```{r gene_examine_package, message=T}
 listPackRatTables(project_dir = "rnaseq_analysis",fullInfo = T)
 
 ```
@@ -214,7 +214,8 @@ Region mode is designed for analyzing genomic intervals from ATAC-seq, ChIP-seq,
 
 We include two versions of Region Mode Analysis:  The first for QTL mapping, the second for ATAC-seq data.
 
-## QTL:  Initialize Project with Genomic Regions
+## QTL Project
+### Initialize Project with Genomic Regions
 
 ```{r region_mode_init_QTL}
 #LocusPackRat includes an example QTL output with a single significant locus on chromsome 3.
@@ -241,7 +242,8 @@ initPackRat(
 
 ```
 
-## Add QTL Data and CC Founder Information
+### Add Supplementary Data
+#### Add QTL Data and CC Founder Information
 
 ```{r add_QTL_and_Founder_Information}
 QTL_file <- system.file("extdata", "sample_scan.csv", package = "locusPackRat")
@@ -279,7 +281,7 @@ addRatTable(
 
 ```
 
-## Add Mutation Information
+#### Add Mutation Information
 
 Non-synonymous mutation information is provided for these two loci and drawn from the Wellcome Trust Mouse Genomes Resource
 
@@ -302,21 +304,21 @@ addRatTable(
 
 ```
 
-## Add mouseMine and Open Targets data
+#### Add mouseMine and Open Targets data
 
 ```{r add_mouseMine_and_Open_Targets_data_QTL}
 queryMouseMine(project_dir = "qtl_analysis")
 queryOpenTargets(project_dir = "qtl_analysis") 
 ```
 
-## Examine Package Structure Before Creating Outputs
+### Examine Package Structure Before Creating Outputs
 
-```{r gene_examine_package_QTL}
+```{r gene_examine_package_QTL, message=T}
 listPackRatTables(project_dir = "qtl_analysis",fullInfo = T)
 
 ```
 
-## Generate Locus Plot
+### Generate Locus Plot
 
 ```{r generate_QTL_plot}
 generateLocusZoomPlot(
@@ -331,7 +333,7 @@ generateLocusZoomPlot(
 
 ```
 
-##Generate Excel Sheet
+### Generate Excel Sheet
 
 Additional sheets can be created from any boolean (True/False) argument.
 Boolean statements in R can be strung together with & (and) or | (or).
@@ -363,9 +365,9 @@ makeGeneSheet(
 
 ```
 
+## ATACseq Project
 
-
-## Initialize Project with Genomic Regions - ATACseq
+### Initialize Project with Genomic Regions - ATACseq
 
 ```{r region_mode_init_ATAC}
 # Prepare example ATAC-seq peaks
@@ -399,9 +401,9 @@ initPackRat(
 )
 ```
 
-## Add Chromatin Annotations
+### Add Chromatin Annotations
 
-### Chromatin States
+#### Chromatin States
 
 ```{r add_chromatin}
 # Load processed regions
@@ -430,7 +432,7 @@ addRatTable(
 )
 ```
 
-### Transcription Factor Motifs
+#### Transcription Factor Motifs
 
 ```{r add_tf_motifs}
 # Add TF binding motif data
@@ -464,7 +466,7 @@ addRatTable(
 )
 ```
 
-### Differential Accessibility
+#### Differential Accessibility
 
 ```{r add_differential}
 # Add differential accessibility between conditions
@@ -490,7 +492,7 @@ addRatTable(
 )
 ```
 
-### Add mouseMine and Open Targets data
+#### Add mouseMine and Open Targets data
 
 ```{r add_mouseMine_and_Open_Targets_data_ATAC}
 queryMouseMine(project_dir = "atacseq_analysis")
@@ -499,12 +501,12 @@ queryOpenTargets(project_dir = "atacseq_analysis")
 
 ### Examine Package Structure Before Creating Output
 
-```{r gene_examine_package_ATAC}
+```{r gene_examine_package_ATAC, message=T}
 listPackRatTables(project_dir = "atacseq_analysis",fullInfo = T)
 
 ```
 
-## Generate Region Analysis Workbooks
+### Generate ATACseq Region Analysis Workbooks
 
 Additional sheets can be created from any boolean (True/False) argument.
 Boolean statements in R can be strung together with & (and) or | (or).
@@ -619,11 +621,10 @@ makeGeneSheet(
 
 ## List Available Tables
 
-```{r list_tables}
+```{r list_tables, message=T}
 # View supplementary tables in each project
 listPackRatTables("rnaseq_analysis",fullInfo = T)
-listPackRatTables("atacseq_analysis",fullInfo = T)
-listPackRatTables("cancer_genes",fullInfo = T)
+listPackRatTables("atacseq_analysis",fullInfo = F)
 ```
 
 ## Project Configuration
