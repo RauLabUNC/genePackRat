@@ -18,6 +18,7 @@ tests/integration/output/
 tests/test_r_libs/
 tests/test_r_libs_old/
 vignettes/rnaseq_analysis/
+vignettes/cancer_genes/
 rnaseq_analysis/
 atacseq_analysis/
 qtl_analysis/

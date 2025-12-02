@@ -192,6 +192,7 @@ makeGeneSheet(
   output_file = "rnaseq_complete_analysis.xlsx",
   split_by = "criteria",
   prefix_mode = "collision",
+    
   split_criteria = list(
     "All_DEGs" = "TRUE",
     "Upregulated" = "direction == 'up'",
@@ -626,6 +627,15 @@ makeGeneSheet(
 listPackRatTables("rnaseq_analysis",fullInfo = T)
 listPackRatTables("atacseq_analysis",fullInfo = F)
 ```
+
+## Remove a Table
+
+```{r remove_table}
+
+removeRatTable("ot_diseases",project_dir = "atacseq_analysis")
+
+```
+
 
 ## Project Configuration
 
