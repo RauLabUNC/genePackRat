@@ -17,3 +17,10 @@ Invisible TRUE on success
 \description{
 Removes a supplementary table and its metadata from a project
 }
+\examples{
+\dontrun{
+# Remove a supplementary table
+removeRatTable("old_data", project_dir = "my_analysis")
+}
+
+}

@@ -25,6 +25,15 @@
 #'
 #' @return Invisible data.table of results
 #'
+#' @examples
+#' \dontrun{
+#' # Query MouseMine for all genes in project
+#' queryMouseMine(project_dir = "my_analysis")
+#'
+#' # Test with limited genes
+#' queryMouseMine(project_dir = "my_analysis", limit = 10)
+#' }
+#'
 #' @export
 queryMouseMine <- function(project_dir = ".", limit = NULL, chunk_size = 200) {
 
@@ -141,8 +150,17 @@ queryMouseMine <- function(project_dir = ".", limit = NULL, chunk_size = 200) {
 #' @param chunk_size Integer. Number of genes per API call (default 50).
 #'
 #' @return Invisible TRUE on success
-#' 
-#' @importFrom stats na.omit  
+#'
+#' @examples
+#' \dontrun{
+#' # Query Open Targets for all genes in project
+#' queryOpenTargets(project_dir = "my_analysis")
+#'
+#' # Test with limited genes
+#' queryOpenTargets(project_dir = "my_analysis", limit = 5)
+#' }
+#'
+#' @importFrom stats na.omit
 #' @export
 queryOpenTargets <- function(project_dir = ".", limit = NULL, chunk_size = 50) {
   

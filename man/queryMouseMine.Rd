@@ -20,3 +20,13 @@ Invisible data.table of results
 Queries the MouseMine database for gene phenotype annotations using the
 MouseMine REST API directly (no InterMineR dependency required).
 }
+\examples{
+\dontrun{
+# Query MouseMine for all genes in project
+queryMouseMine(project_dir = "my_analysis")
+
+# Test with limited genes
+queryMouseMine(project_dir = "my_analysis", limit = 10)
+}
+
+}

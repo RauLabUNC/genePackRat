@@ -84,3 +84,25 @@ data.table of the gene sheet (invisible)
 \description{
 Creates formatted gene sheets (CSV or Excel) from project data with optional filtering and highlighting
 }
+\examples{
+\dontrun{
+# Basic CSV export
+makeGeneSheet(format = "csv", output_file = "results.csv",
+              project_dir = "my_analysis")
+
+# Filtered Excel export with multiple sheets
+makeGeneSheet(
+  format = "excel",
+  output_file = "analysis.xlsx",
+  split_by = "criteria",
+  split_criteria = list(
+    "All_Genes" = "TRUE",
+    "Significant" = "padj < 0.05",
+    "Upregulated" = "log2FC > 1"
+  ),
+  highlight_genes = c("Myc", "Tp53"),
+  project_dir = "my_analysis"
+)
+}
+
+}

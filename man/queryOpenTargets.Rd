@@ -20,3 +20,13 @@ Invisible TRUE on success
 Fetches disease associations, genetic constraints, and drug tractability
 information from the Open Targets GraphQL API.
 }
+\examples{
+\dontrun{
+# Query Open Targets for all genes in project
+queryOpenTargets(project_dir = "my_analysis")
+
+# Test with limited genes
+queryOpenTargets(project_dir = "my_analysis", limit = 5)
+}
+
+}

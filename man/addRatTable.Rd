@@ -37,3 +37,25 @@ Invisible TRUE on success
 Adds supplementary data tables linked to genes or regions in an existing project.
 Can handle gene-based data, genomic regions, or point coordinates (e.g., SNPs).
 }
+\examples{
+\dontrun{
+# Link by gene symbol
+expression_data <- data.frame(
+  gene_symbol = c("Myc", "Tp53"),
+  tissue_expr = c(100, 50)
+)
+addRatTable(expression_data, table_name = "expression",
+            link_type = "gene", link_by = "gene_symbol",
+            project_dir = "my_analysis")
+
+# Link by genomic region
+peak_data <- data.frame(
+  chr = c("1", "1"), start = c(1000, 2000), end = c(1500, 2500),
+  score = c(10, 20)
+)
+addRatTable(peak_data, table_name = "peaks", abbreviation = "pk",
+            link_type = "region", link_by = "chr,start,end",
+            project_dir = "my_analysis")
+}
+
+}
