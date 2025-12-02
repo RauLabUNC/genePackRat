@@ -272,7 +272,7 @@ founder_Data <- fread(founder_file)
 
 addRatTable(
   data = founder_Data,
-  table_name = "founder info",
+  table_name = "founder_info",
   abbreviation = "fi",
   link_type = "region",
   link_by = "chr,start,end",

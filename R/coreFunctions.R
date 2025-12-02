@@ -1402,6 +1402,18 @@ makeGeneSheet <- function(filter_expr = NULL,
   return(summary)
 }
 
+#' Sort Data by region_id then gene_symbol
+#' @noRd
+.sortByRegionAndGene <- function(dt) {
+  sort_cols <- c()
+  if ("region_id" %in% names(dt)) sort_cols <- c(sort_cols, "region_id")
+  if ("gene_symbol" %in% names(dt)) sort_cols <- c(sort_cols, "gene_symbol")
+  if (length(sort_cols) > 0) {
+    data.table::setorderv(dt, sort_cols, na.last = TRUE)
+  }
+  return(dt)
+}
+
 #' Detect Column Format Based on Name and Data
 #' @noRd
 .detectColumnFormat <- function(col_name, col_data) {
@@ -1661,8 +1673,8 @@ makeGeneSheet <- function(filter_expr = NULL,
     return(wb)
   }
 
-  # Sort by gene_symbol for better grouping
-  detail_result <- detail_result[order(gene_symbol)]
+  # Sort by region_id then gene_symbol for consistent ordering
+  detail_result <- .sortByRegionAndGene(detail_result)
 
   # Add worksheet (use writeData instead of writeDataTable if merging)
   openxlsx::addWorksheet(wb, "Phenotypes_Detail")
@@ -1871,8 +1883,8 @@ makeGeneSheet <- function(filter_expr = NULL,
     return(wb)
   }
 
-  # Sort by gene_symbol for better grouping
-  detail_result <- detail_result[order(gene_symbol)]
+  # Sort by region_id then gene_symbol for consistent ordering
+  detail_result <- .sortByRegionAndGene(detail_result)
 
   # Add worksheet
   openxlsx::addWorksheet(wb, "Diseases_Detail")
@@ -2091,6 +2103,9 @@ makeGeneSheet <- function(filter_expr = NULL,
     if (any(all_na_cols)) {
       sheet_data <- sheet_data[, !all_na_cols, with = FALSE]
     }
+
+    # Sort by region_id then gene_symbol for consistent ordering
+    sheet_data <- .sortByRegionAndGene(sheet_data)
 
     sheets_info[[sheet_name]] <- nrow(sheet_data)
 
