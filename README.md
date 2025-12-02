@@ -117,10 +117,30 @@ queryOpenTargets(project_dir = "my_analysis")
 # Creates: ot_diseases (abbrev: "otd"), ot_constraints ("otc"), ot_tractability ("ott")
 ```
 
+## Visualization Function
+
+###`generateLocusZoomPlot()`
+Generates a LocusZoom-style plot for visualization of a locus.  Requires the plotGardener package.  
+
+```r 
+generateLocusZoomPlot(
+     region_id="region_1",
+     project_dir="my_analysis",
+     scan_table="LoD_Values",
+     signal_table="CC_Founder_Data",
+     width=10,
+     height=6,
+     threshold=4,
+     layout_ratios = c(manhattan = 0.35, signal = 0.40, genes = 0.25))
+
+```
+
+
 ## Other Functions
 
 - `listPackRatTables()` - List supplementary tables in a project
-- `generateLocusZoomPlot()` - Multi-panel locus plots (Manhattan, signals, genes) via plotgardener
+- `removeRatTable()` - Delete a supplementary table from a project
+
 
 ## Project Structure
 
@@ -149,12 +169,12 @@ my_analysis/
 
 ## Dependencies
 
-**Required:** data.table, jsonlite, openxlsx, dplyr, httr
+**Required:** data.table, jsonlite, openxlsx, dplyr, httr, Bioconductor 3.22
 **Optional:** plotgardener (for visualization)
 
 ## Citation
 
-Gural B, Kimball T, Luu A, Rau CD. locusPackRat: A Flexible Framework for Prioritizing Candidate Genes from GWAS and other Gene-Level Studies. *In preparation* (2025).
+Gural B, Kimball T, Luu A, Rau CD. locusPackRat: A Flexible Framework for Prioritizing Candidate Genes from GWAS and other Gene-Level Studies. *Under Review* (2025).
 
 ## License
 
