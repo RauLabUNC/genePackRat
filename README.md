@@ -172,6 +172,11 @@ my_analysis/
 **Required:** data.table, jsonlite, openxlsx, dplyr, httr, Bioconductor 3.22
 **Optional:** plotgardener (for visualization)
 
+## Future Plans
+
+We plan to extend locusPackRat to other species, notably flies and rats.  Please leave us a note of any other species you might wish to have us incorporate!
+
+
 ## Citation
 
 Gural B, Kimball T, Luu A, Rau CD. locusPackRat: A Flexible Framework for Prioritizing Candidate Genes from GWAS and other Gene-Level Studies. *Under Review* (2025).
