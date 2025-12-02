@@ -15,3 +15,5 @@
 ^EF21_Iso_LocusZoom\.pdf$
 ^.*\.Rproj$
 ^\.Rproj\.user$
+^\.github$
+^format_test$

@@ -1,7 +1,7 @@
 Package: locusPackRat
 Type: Package
 Title: Flexible R Package for Managing Genomic Analysis Projects
-Version: 0.3.0
+Version: 0.5.0
 Authors@R: c(
     person("Brian", "Gural", email = "bgural@unc.edu", role = c("aut", "cre")),
     person("Todd", "Kimball", role = "aut"),

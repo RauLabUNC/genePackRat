@@ -171,7 +171,7 @@ queryOpenTargets(project_dir = "rnaseq_analysis")
 ## Examine Package Structure Before Creating Outputs
 
 ```{r gene_examine_package, message=T}
-listPackRatTables(project_dir = "rnaseq_analysis",fullInfo = T)
+listPackRatTables(project_dir = "rnaseq_analysis", full_info = TRUE)
 
 ```
 
@@ -179,7 +179,7 @@ listPackRatTables(project_dir = "rnaseq_analysis",fullInfo = T)
 
 Additional sheets can be created from any boolean (True/False) argument.
 Boolean statements in R can be strung together with & (and) or | (or).
-We recommend examining the package structure above with fullInfo = T to identify column names
+We recommend examining the package structure above with full_info = TRUE to identify column names
 
 Note: beware of capitalization.  For whatever reason mouseMine does not capitalize any terms other than gene names, while OpenTargets is somewhat inconsistent.  If needed, more complex arguments e.g. ('Cardiac' | 'cardiac') & padj <.001 may be used.
 
@@ -259,7 +259,7 @@ QTL_Data <- data.table(
 
 addRatTable(
   data = QTL_Data,
-  table_name = "QTL results",
+  table_name = "QTL_results",
   abbreviation = "qr",
   link_type = "region",
   link_by = "chr,start,end",
@@ -294,7 +294,7 @@ SNP_Data$end <- SNP_Data$pos
 
 addRatTable(
   data = SNP_Data,
-  table_name = "NS_SNP information",
+  table_name = "NS_SNP_information",
   abbreviation = "NSi",
   link_type = "region",
   link_by = "chr,start,end",
@@ -314,7 +314,7 @@ queryOpenTargets(project_dir = "qtl_analysis")
 ### Examine Package Structure Before Creating Outputs
 
 ```{r gene_examine_package_QTL, message=T}
-listPackRatTables(project_dir = "qtl_analysis",fullInfo = T)
+listPackRatTables(project_dir = "qtl_analysis", full_info = TRUE)
 
 ```
 
@@ -324,8 +324,8 @@ listPackRatTables(project_dir = "qtl_analysis",fullInfo = T)
 generateLocusZoomPlot(
      region_id="region_1",
      project_dir="qtl_analysis",
-     scan_table="QTL results",
-     signal_table="founder info",
+     scan_table="QTL_results",
+     signal_table="founder_info",
      width=10,
      height=6,
      threshold=4,
@@ -337,7 +337,7 @@ generateLocusZoomPlot(
 
 Additional sheets can be created from any boolean (True/False) argument.
 Boolean statements in R can be strung together with & (and) or | (or).
-We recommend examining the package structure above with fullInfo = T to identify column names.
+We recommend examining the package structure above with full_info = TRUE to identify column names.
 
 For Region-based packages, one likely does not wish to include all region-based information in the output (for example, the LoD scores from the genome scan itself).  The exclude_tables argument will allow you to exclude these from your output
 
@@ -359,7 +359,7 @@ makeGeneSheet(
     "Sig OTC" = "(otc_score>1 | otc_score< -1) & peak_id == 'Significant_1'"
   ),
   include_supplementary =  TRUE,
-  exclude_tables=c("founder info","QTL results"),
+  exclude_tables=c("founder_info","QTL_results"),
   project_dir = "qtl_analysis"
 )
 
@@ -502,7 +502,7 @@ queryOpenTargets(project_dir = "atacseq_analysis")
 ### Examine Package Structure Before Creating Output
 
 ```{r gene_examine_package_ATAC, message=T}
-listPackRatTables(project_dir = "atacseq_analysis",fullInfo = T)
+listPackRatTables(project_dir = "atacseq_analysis", full_info = TRUE)
 
 ```
 
@@ -510,7 +510,7 @@ listPackRatTables(project_dir = "atacseq_analysis",fullInfo = T)
 
 Additional sheets can be created from any boolean (True/False) argument.
 Boolean statements in R can be strung together with & (and) or | (or).
-We recommend examining the package structure above with fullInfo = T to identify column names.
+We recommend examining the package structure above with full_info = TRUE to identify column names.
 
 For Region-based packages, one likely does not wish to include all region-based information in the output (for example, the LoD scores from the genome scan itself).  See below how to use include_supplementary to include only the tables you desire
 
@@ -623,8 +623,8 @@ makeGeneSheet(
 
 ```{r list_tables, message=T}
 # View supplementary tables in each project
-listPackRatTables("rnaseq_analysis",fullInfo = T)
-listPackRatTables("atacseq_analysis",fullInfo = F)
+listPackRatTables("rnaseq_analysis", full_info = TRUE)
+listPackRatTables("atacseq_analysis", full_info = FALSE)
 ```
 
 ## Project Configuration

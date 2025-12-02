@@ -18,6 +18,26 @@
 #'       in tests/test_data/ (or inst/extdata/ when installed as a package).
 #'       Currently supports mm39 (mouse) and hg38 (human) genomes.
 #'
+#' @examples
+#' \dontrun{
+#' # Gene mode: Initialize with a gene list
+#' genes <- data.frame(
+#'   gene_symbol = c("Myc", "Tp53", "Egfr"),
+#'   log2FC = c(1.5, -2.1, 0.8)
+#' )
+#' initPackRat(genes, mode = "gene", species = "mouse", genome = "mm39",
+#'             project_dir = "my_analysis")
+#'
+#' # Region mode: Initialize with genomic intervals
+#' regions <- data.frame(
+#'   chr = c("1", "3"),
+#'   start = c(1000000, 5000000),
+#'   end = c(2000000, 6000000)
+#' )
+#' initPackRat(regions, mode = "region", species = "mouse", genome = "mm39",
+#'             project_dir = "qtl_analysis")
+#' }
+#'
 #' @importFrom utils head packageVersion
 #' @importFrom data.table setnames fread fwrite setDT := copy
 #' @importFrom dplyr bind_rows
@@ -145,6 +165,27 @@ initPackRat <- function(data,
 #'
 #' @return Invisible TRUE on success
 #'
+#' @examples
+#' \dontrun{
+#' # Link by gene symbol
+#' expression_data <- data.frame(
+#'   gene_symbol = c("Myc", "Tp53"),
+#'   tissue_expr = c(100, 50)
+#' )
+#' addRatTable(expression_data, table_name = "expression",
+#'             link_type = "gene", link_by = "gene_symbol",
+#'             project_dir = "my_analysis")
+#'
+#' # Link by genomic region
+#' peak_data <- data.frame(
+#'   chr = c("1", "1"), start = c(1000, 2000), end = c(1500, 2500),
+#'   score = c(10, 20)
+#' )
+#' addRatTable(peak_data, table_name = "peaks", abbreviation = "pk",
+#'             link_type = "region", link_by = "chr,start,end",
+#'             project_dir = "my_analysis")
+#' }
+#'
 #' @importFrom data.table fread fwrite setDT merge.data.table := setnames
 #' @importFrom jsonlite read_json write_json
 #'
@@ -163,6 +204,11 @@ addRatTable <- function(data,
   
   if (missing(table_name) || is.null(table_name)) {
     stop("table_name must be provided")
+  }
+
+  # Validate table_name characters (alphanumeric, underscore, hyphen, space only)
+  if (!grepl("^[a-zA-Z0-9_ -]+$", table_name)) {
+    stop("table_name must contain only letters, numbers, underscores, hyphens, or spaces")
   }
 
   # Check for existing project
@@ -302,6 +348,12 @@ addRatTable <- function(data,
 #'
 #' @return Invisible TRUE on success
 #'
+#' @examples
+#' \dontrun{
+#' # Remove a supplementary table
+#' removeRatTable("old_data", project_dir = "my_analysis")
+#' }
+#'
 #' @importFrom jsonlite read_json write_json
 #'
 #' @export
@@ -349,16 +401,25 @@ removeRatTable <- function(table_name, project_dir = ".") {
 #' Returns information about available supplementary tables in a project
 #'
 #' @param project_dir Character: Path to project directory containing .locusPackRat
-#' @param fullInfo Boolean: If true, prints all column names for each supplementary table
+#' @param full_info Boolean: If true, prints all column names for each supplementary table
 #' 
 #' @return data.table with table information (name, link_type, link_by, n_rows, n_cols)
+#'
+#' @examples
+#' \dontrun{
+#' # List all supplementary tables
+#' listPackRatTables(project_dir = "my_analysis")
+#'
+#' # List with full column information
+#' listPackRatTables(project_dir = "my_analysis", full_info = TRUE)
+#' }
 #'
 #' @importFrom data.table data.table fread
 #' @importFrom dplyr bind_rows
 #' @importFrom jsonlite read_json
 #'
 #' @export
-listPackRatTables <- function(project_dir = ".", fullInfo=FALSE) {
+listPackRatTables <- function(project_dir = ".", full_info = FALSE) {
   # Check for existing project
   packrat_dir <- file.path(project_dir, ".locusPackRat")
   if (!dir.exists(packrat_dir)) {
@@ -445,7 +506,7 @@ listPackRatTables <- function(project_dir = ".", fullInfo=FALSE) {
                    table_info$n_cols[i],
                    table_info$link_by[i]))
   }
-  if(fullInfo){
+  if (full_info) {
     message(sprintf("Printing full column names for %d supplementary table(s)",nrow(table_info)))
     for(i in 1:length(config$supplementary_tables)){
       name=names(config$supplementary_tables[i][1])
@@ -521,6 +582,27 @@ listPackRatTables <- function(project_dir = ".", fullInfo=FALSE) {
 #' @param merge_repeated Logical: Merge consecutive cells with same gene_symbol in Phenotypes_Detail sheet (default FALSE)
 #'
 #' @return data.table of the gene sheet (invisible)
+#'
+#' @examples
+#' \dontrun{
+#' # Basic CSV export
+#' makeGeneSheet(format = "csv", output_file = "results.csv",
+#'               project_dir = "my_analysis")
+#'
+#' # Filtered Excel export with multiple sheets
+#' makeGeneSheet(
+#'   format = "excel",
+#'   output_file = "analysis.xlsx",
+#'   split_by = "criteria",
+#'   split_criteria = list(
+#'     "All_Genes" = "TRUE",
+#'     "Significant" = "padj < 0.05",
+#'     "Upregulated" = "log2FC > 1"
+#'   ),
+#'   highlight_genes = c("Myc", "Tp53"),
+#'   project_dir = "my_analysis"
+#' )
+#' }
 #'
 #' @importFrom data.table fread fwrite setDT merge.data.table := .SD
 #' @importFrom jsonlite read_json
@@ -866,6 +948,23 @@ makeGeneSheet <- function(filter_expr = NULL,
     # Ensure numeric coordinates
     if ("start" %in% names(result)) result[, start := as.integer(start)]
     if ("end" %in% names(result)) result[, end := as.integer(end)]
+
+    # Report match statistics
+    n_total <- nrow(result)
+    n_matched <- sum(!is.na(result$chr))
+    n_unmatched <- n_total - n_matched
+    if (n_unmatched > 0) {
+      unmatched_genes <- result[is.na(chr), gene_symbol]
+      if (length(unmatched_genes) > 5) {
+        unmatched_preview <- paste(c(head(unmatched_genes, 5), "..."), collapse = ", ")
+      } else {
+        unmatched_preview <- paste(unmatched_genes, collapse = ", ")
+      }
+      message(sprintf("  Matched %d/%d genes to coordinates (%d not found: %s)",
+                      n_matched, n_total, n_unmatched, unmatched_preview))
+    } else {
+      message(sprintf("  Matched all %d genes to coordinates", n_total))
+    }
   } else {
     message("  Note: Coordinate data file not found, using NA placeholders")
   }
@@ -1199,14 +1298,20 @@ makeGeneSheet <- function(filter_expr = NULL,
     overlap_types_list <- strsplit(region_data$overlap_types, ", ")
   }
 
-  # Create expanded table
-  result <- region_data[rep(seq_len(nrow(region_data)), lengths(genes_list))]
-  result[, gene_symbol := unlist(genes_list)]
+  # Create expanded table (keep regions even if they have no genes)
+  n_genes <- lengths(genes_list)
+  n_genes[n_genes == 0] <- 1  # Ensure at least 1 row per region
+  result <- region_data[rep(seq_len(nrow(region_data)), n_genes)]
+
+  # Assign gene symbols, using NA for regions with no genes
+  gene_symbols <- lapply(genes_list, function(x) if(length(x) == 0) NA_character_ else x)
+  result[, gene_symbol := unlist(gene_symbols)]
   result[, gene_symbol := trimws(gene_symbol)]
 
-  # Add overlap_type for each gene
+  # Add overlap_type for each gene (NA for regions with no genes)
   if (has_overlap_types) {
-    result[, overlap_type := unlist(overlap_types_list)]
+    overlap_types_expanded <- lapply(overlap_types_list, function(x) if(length(x) == 0) NA_character_ else x)
+    result[, overlap_type := unlist(overlap_types_expanded)]
     result[, overlap_type := trimws(overlap_type)]
     # Remove the aggregated column
     result[, overlap_types := NULL]
@@ -1350,7 +1455,8 @@ makeGeneSheet <- function(filter_expr = NULL,
 
 #' Create Summary Sheet
 #' @noRd
-.createSummarySheet <- function(wb, sheets_info, filter_expr = NULL) {
+.createSummarySheet <- function(wb, sheets_info, filter_expr = NULL,
+                                phenotypes_data = NULL, diseases_data = NULL) {
   openxlsx::addWorksheet(wb, "Summary", gridLines = FALSE)
 
   # Get package version
@@ -1390,6 +1496,36 @@ makeGeneSheet <- function(filter_expr = NULL,
     summary_lines <- c(summary_lines, "", "Filter applied:", paste(" ", filter_expr))
   }
 
+  # Add top 15 phenotypes section
+  if (!is.null(phenotypes_data) && nrow(phenotypes_data) > 0) {
+    pheno_col <- intersect(c("phenotype", "mm_phenotype"), names(phenotypes_data))[1]
+    if (!is.na(pheno_col)) {
+      pheno_counts <- sort(table(phenotypes_data[[pheno_col]]), decreasing = TRUE)
+      top_pheno <- head(pheno_counts, 15)
+      summary_lines <- c(summary_lines, "", "Top 15 Phenotypes (by frequency):",
+                         paste(rep("-", 35), collapse = ""))
+      for (i in seq_along(top_pheno)) {
+        summary_lines <- c(summary_lines,
+                           sprintf("  %d. %s (%d)", i, names(top_pheno)[i], top_pheno[i]))
+      }
+    }
+  }
+
+  # Add top 15 diseases section
+  if (!is.null(diseases_data) && nrow(diseases_data) > 0) {
+    disease_col <- intersect(c("disease_name", "otd_disease_name"), names(diseases_data))[1]
+    if (!is.na(disease_col)) {
+      disease_counts <- sort(table(diseases_data[[disease_col]]), decreasing = TRUE)
+      top_diseases <- head(disease_counts, 15)
+      summary_lines <- c(summary_lines, "", "Top 15 Diseases (by frequency):",
+                         paste(rep("-", 35), collapse = ""))
+      for (i in seq_along(top_diseases)) {
+        summary_lines <- c(summary_lines,
+                           sprintf("  %d. %s (%d)", i, names(top_diseases)[i], top_diseases[i]))
+      }
+    }
+  }
+
   # Write summary content
   summary_df <- data.frame(Summary = summary_lines, stringsAsFactors = FALSE)
   openxlsx::writeData(wb, sheet = "Summary", x = summary_df, colNames = FALSE)
@@ -1403,7 +1539,7 @@ makeGeneSheet <- function(filter_expr = NULL,
   openxlsx::addStyle(wb, sheet = "Summary", style = title_style, rows = 1, cols = 1)
 
   # Set column width for readability
-  openxlsx::setColWidths(wb, sheet = "Summary", cols = 1, widths = 50)
+  openxlsx::setColWidths(wb, sheet = "Summary", cols = 1, widths = 60)
 }
 
 #' Create Phenotypes Detail Sheet from MouseMine Data
@@ -1621,7 +1757,7 @@ makeGeneSheet <- function(filter_expr = NULL,
   openxlsx::addStyle(wb, sheet = "Phenotypes_Detail", style = header_style,
                      rows = 1, cols = 1:ncol(detail_result), stack = TRUE)
   openxlsx::setColWidths(wb, sheet = "Phenotypes_Detail", cols = 1:ncol(detail_result), widths = "auto")
-  openxlsx::freezePane(wb, sheet = "Phenotypes_Detail", firstActiveRow = 2)
+  openxlsx::freezePane(wb, sheet = "Phenotypes_Detail", firstActiveRow = 2, firstActiveCol = 2)
 
   return(wb)
 }
@@ -1788,7 +1924,7 @@ makeGeneSheet <- function(filter_expr = NULL,
   openxlsx::addStyle(wb, sheet = "Diseases_Detail", style = header_style,
                      rows = 1, cols = 1:ncol(detail_result), stack = TRUE)
   openxlsx::setColWidths(wb, sheet = "Diseases_Detail", cols = 1:ncol(detail_result), widths = "auto")
-  openxlsx::freezePane(wb, sheet = "Diseases_Detail", firstActiveRow = 2)
+  openxlsx::freezePane(wb, sheet = "Diseases_Detail", firstActiveRow = 2, firstActiveCol = 2)
 
   return(wb)
 }
@@ -1797,7 +1933,7 @@ makeGeneSheet <- function(filter_expr = NULL,
 #' @noRd
 .createRegionsSheet <- function(wb, data, header_style) {
   # Check if this is region mode data
-  region_cols <- c("region_id", "region_chr", "region_start", "region_end", "genes", "overlap_types", "from_region")
+  region_cols <- c("region_id", "region_chr", "region_start", "region_end", "genes", "overlap_types")
   present_cols <- intersect(region_cols, names(data))
 
   if (length(present_cols) < 3) {
@@ -1808,7 +1944,7 @@ makeGeneSheet <- function(filter_expr = NULL,
 
   # Extract unique region data
   # Include any user columns that might be at region level (e.g., peak_id, max_lod)
-  key_cols <- c("region_id", "from_region")
+  key_cols <- c("region_id")
   key_col <- intersect(key_cols, names(data))[1]
 
   if (is.na(key_col)) {
@@ -1820,7 +1956,7 @@ makeGeneSheet <- function(filter_expr = NULL,
   for (col in names(data)) {
     if (col == "gene_symbol") next
     # Check if column is constant within each region
-    test <- data[, .(n_unique = uniqueN(get(col))), by = key_col]
+    test <- data[, .(n_unique = data.table::uniqueN(get(col))), by = key_col]
     if (all(test$n_unique <= 1, na.rm = TRUE)) {
       region_level_cols <- c(region_level_cols, col)
     }
@@ -1829,6 +1965,17 @@ makeGeneSheet <- function(filter_expr = NULL,
   # Create regions summary
   if (length(region_level_cols) > 0) {
     regions_data <- unique(data[, region_level_cols, with = FALSE])
+
+    # Sort alphabetically by region_id for consistent ordering
+    if ("region_id" %in% names(regions_data)) {
+      data.table::setorderv(regions_data, "region_id", na.last = TRUE)
+    }
+
+    # Remove columns where all values are NA
+    all_na_cols <- sapply(regions_data, function(x) all(is.na(x)))
+    if (any(all_na_cols)) {
+      regions_data <- regions_data[, !all_na_cols, with = FALSE]
+    }
 
     # Add worksheet
     openxlsx::addWorksheet(wb, "Regions")
@@ -1848,8 +1995,8 @@ makeGeneSheet <- function(filter_expr = NULL,
           # Apply wrap to all data rows in this column
           openxlsx::addStyle(wb, sheet = "Regions", style = wrap_style,
                              rows = 2:(nrow(regions_data) + 1), cols = col_idx, stack = TRUE)
-          # Set column width to 40 for wrapped columns
-          openxlsx::setColWidths(wb, sheet = "Regions", cols = col_idx, widths = 40)
+          # Set column width to 80 for wrapped columns
+          openxlsx::setColWidths(wb, sheet = "Regions", cols = col_idx, widths = 80)
         } else {
           openxlsx::setColWidths(wb, sheet = "Regions", cols = col_idx, widths = "auto")
         }
@@ -1858,11 +2005,11 @@ makeGeneSheet <- function(filter_expr = NULL,
       }
     }
 
-    openxlsx::freezePane(wb, sheet = "Regions", firstActiveRow = 2)
+    openxlsx::freezePane(wb, sheet = "Regions", firstActiveRow = 2, firstActiveCol = 2)
   }
 
-  # Remove redundant columns from main data (keep from_region as reference)
-  cols_to_remove <- setdiff(present_cols, c("from_region"))
+  # Remove redundant region columns from main data
+  cols_to_remove <- present_cols
   data_cleaned <- data[, !names(data) %in% cols_to_remove, with = FALSE]
 
   return(list(wb = wb, data = data_cleaned))
@@ -1939,6 +2086,12 @@ makeGeneSheet <- function(filter_expr = NULL,
     sheet_data <- sheets[[sheet_name]]
     if (nrow(sheet_data) == 0) next
 
+    # Remove columns where all values are NA
+    all_na_cols <- sapply(sheet_data, function(x) all(is.na(x)))
+    if (any(all_na_cols)) {
+      sheet_data <- sheet_data[, !all_na_cols, with = FALSE]
+    }
+
     sheets_info[[sheet_name]] <- nrow(sheet_data)
 
     openxlsx::addWorksheet(wb, sheet_name)
@@ -2014,7 +2167,7 @@ makeGeneSheet <- function(filter_expr = NULL,
     openxlsx::setColWidths(wb, sheet = sheet_name, cols = 1:ncol(sheet_data), widths = col_widths)
 
     # Freeze header row
-    openxlsx::freezePane(wb, sheet = sheet_name, firstActiveRow = 2)
+    openxlsx::freezePane(wb, sheet = sheet_name, firstActiveRow = 2, firstActiveCol = 2)
   }
 
   # Add phenotypes detail sheet if mouseMine data present
@@ -2030,20 +2183,22 @@ makeGeneSheet <- function(filter_expr = NULL,
     regions_nrow <- nrow(openxlsx::readWorkbook(wb, sheet = "Regions"))
     sheets_info <- c(list(Regions = regions_nrow), sheets_info)
   }
+  phenotypes_data <- NULL
+  diseases_data <- NULL
   if ("Phenotypes_Detail" %in% all_sheets) {
-    # Get row count from Phenotypes_Detail sheet
-    pheno_nrow <- nrow(openxlsx::readWorkbook(wb, sheet = "Phenotypes_Detail"))
-    sheets_info[["Phenotypes_Detail"]] <- pheno_nrow
+    # Get data from Phenotypes_Detail sheet
+    phenotypes_data <- data.table::as.data.table(openxlsx::readWorkbook(wb, sheet = "Phenotypes_Detail"))
+    sheets_info[["Phenotypes_Detail"]] <- nrow(phenotypes_data)
   }
   if ("Diseases_Detail" %in% all_sheets) {
-    # Get row count from Diseases_Detail sheet
-    diseases_nrow <- nrow(openxlsx::readWorkbook(wb, sheet = "Diseases_Detail"))
-    sheets_info[["Diseases_Detail"]] <- diseases_nrow
+    # Get data from Diseases_Detail sheet
+    diseases_data <- data.table::as.data.table(openxlsx::readWorkbook(wb, sheet = "Diseases_Detail"))
+    sheets_info[["Diseases_Detail"]] <- nrow(diseases_data)
   }
 
   # Add summary sheet (at the beginning)
   if (include_summary && length(sheets_info) > 0) {
-    .createSummarySheet(wb, sheets_info, filter_expr)
+    .createSummarySheet(wb, sheets_info, filter_expr, phenotypes_data, diseases_data)
     # Move summary sheet to first position
     openxlsx::worksheetOrder(wb) <- c(length(openxlsx::sheets(wb)), 1:(length(openxlsx::sheets(wb)) - 1))
   }

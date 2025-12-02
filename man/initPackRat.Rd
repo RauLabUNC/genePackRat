@@ -26,7 +26,8 @@ initPackRat(
 
 \item{project_dir}{Character: Path to project directory (default: current directory)}
 
-\item{keep_pseudo}{Logical: If FALSE, removes all gm***** genes from region list.  Does nothing in gene mode}
+\item{keep_pseudo}{Logical: If FALSE, removes pseudogenes (Gm* and *Rik genes)
+from region list. Does nothing in gene mode.}
 
 \item{overlap_mode}{Character: "any" (default) keeps genes with any overlap,
 "complete" keeps only genes entirely within regions}
@@ -43,4 +44,25 @@ Creates a .locusPackRat directory structure and initializes project with gene or
 Genome coordinates and orthology mappings are loaded from cached data files
       in tests/test_data/ (or inst/extdata/ when installed as a package).
       Currently supports mm39 (mouse) and hg38 (human) genomes.
+}
+\examples{
+\dontrun{
+# Gene mode: Initialize with a gene list
+genes <- data.frame(
+  gene_symbol = c("Myc", "Tp53", "Egfr"),
+  log2FC = c(1.5, -2.1, 0.8)
+)
+initPackRat(genes, mode = "gene", species = "mouse", genome = "mm39",
+            project_dir = "my_analysis")
+
+# Region mode: Initialize with genomic intervals
+regions <- data.frame(
+  chr = c("1", "3"),
+  start = c(1000000, 5000000),
+  end = c(2000000, 6000000)
+)
+initPackRat(regions, mode = "region", species = "mouse", genome = "mm39",
+            project_dir = "qtl_analysis")
+}
+
 }

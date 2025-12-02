@@ -1,3 +1,17 @@
+# locusPackRat 0.5.0
+
+## Breaking Changes
+- `listPackRatTables()`: parameter `fullInfo` renamed to `full_info` for API consistency
+
+## Improvements
+- Testing infrastructure with testthat
+- Documentation examples for all exported functions
+- Input validation improvements in `addRatTable()` (validates table_name characters)
+- Match statistics reporting in `initPackRat()` (shows matched/unmatched genes)
+- GitHub Actions CI for automated R CMD check
+
+---
+
 # locusPackRat 0.4.0
 
 ## New Features
