@@ -402,7 +402,9 @@ removeRatTable <- function(table_name, project_dir = ".") {
 #'
 #' @param project_dir Character: Path to project directory containing .locusPackRat
 #' @param full_info Boolean: If true, prints all column names for each supplementary table
-#' 
+#' @param criteria_info Boolean: If true, prints detailed column summaries useful for
+#'   building upset plot criteria. Shows data types, ranges (numeric), and sample values (character).
+#'
 #' @return data.table with table information (name, link_type, link_by, n_rows, n_cols)
 #'
 #' @examples
@@ -412,6 +414,9 @@ removeRatTable <- function(table_name, project_dir = ".") {
 #'
 #' # List with full column information
 #' listPackRatTables(project_dir = "my_analysis", full_info = TRUE)
+#'
+#' # List with criteria-building info (types, ranges, sample values)
+#' listPackRatTables(project_dir = "my_analysis", criteria_info = TRUE)
 #' }
 #'
 #' @importFrom data.table data.table fread
@@ -419,7 +424,7 @@ removeRatTable <- function(table_name, project_dir = ".") {
 #' @importFrom jsonlite read_json
 #'
 #' @export
-listPackRatTables <- function(project_dir = ".", full_info = FALSE) {
+listPackRatTables <- function(project_dir = ".", full_info = FALSE, criteria_info = FALSE) {
   # Check for existing project
   packrat_dir <- file.path(project_dir, ".locusPackRat")
   if (!dir.exists(packrat_dir)) {
@@ -516,6 +521,84 @@ listPackRatTables <- function(project_dir = ".", full_info = FALSE) {
     }
     message(sprintf("Completed"))
   }
+
+  # Criteria info mode: print detailed column summaries for building criteria
+  if (criteria_info) {
+    message("\n=== Column Details for Criteria Building ===\n")
+
+    for (sf in supp_files) {
+      table_name <- sub("\\.csv$", "", sf)
+      file_path <- file.path(supp_dir, sf)
+
+      # Get table metadata
+      tbl_row <- table_info[table_info$table_name == table_name, ]
+      link_info <- if (!is.na(tbl_row$link_by[1])) {
+        sprintf(", linked by %s", tbl_row$link_by[1])
+      } else {
+        ""
+      }
+
+      message(sprintf("Table: %s (%d rows%s)",
+                      table_name, tbl_row$n_rows[1], link_info))
+      message("  Available columns for criteria:")
+
+      # Load full table for column analysis
+      tryCatch({
+        table_data <- data.table::fread(file_path)
+
+        for (col_name in names(table_data)) {
+          col_data <- table_data[[col_name]]
+
+          if (is.numeric(col_data)) {
+            # Numeric: show min, max, median
+            col_min <- signif(min(col_data, na.rm = TRUE), 4)
+            col_max <- signif(max(col_data, na.rm = TRUE), 4)
+            col_med <- signif(stats::median(col_data, na.rm = TRUE), 4)
+            n_na <- sum(is.na(col_data))
+            na_info <- if (n_na > 0) sprintf(", %d NA", n_na) else ""
+            message(sprintf("    - %s (numeric): min=%s, max=%s, median=%s%s",
+                            col_name, col_min, col_max, col_med, na_info))
+
+          } else if (is.logical(col_data)) {
+            # Logical: show TRUE/FALSE counts
+            n_true <- sum(col_data, na.rm = TRUE)
+            n_false <- sum(!col_data, na.rm = TRUE)
+            n_na <- sum(is.na(col_data))
+            na_info <- if (n_na > 0) sprintf(", %d NA", n_na) else ""
+            message(sprintf("    - %s (logical): %d TRUE, %d FALSE%s",
+                            col_name, n_true, n_false, na_info))
+
+          } else {
+            # Character: show unique count and sample values
+            unique_vals <- unique(col_data[!is.na(col_data) & col_data != ""])
+            n_unique <- length(unique_vals)
+            n_na <- sum(is.na(col_data) | col_data == "")
+
+            if (n_unique <= 6) {
+              # Few unique values - show all
+              vals_str <- paste(sprintf("\"%s\"", unique_vals), collapse = ", ")
+              message(sprintf("    - %s (character): %d unique values: %s",
+                              col_name, n_unique, vals_str))
+            } else {
+              # Many unique values - show first 3 and last 3
+              sorted_vals <- sort(unique_vals)
+              first3 <- paste(sprintf("\"%s\"", head(sorted_vals, 3)), collapse = ", ")
+              last3 <- paste(sprintf("\"%s\"", tail(sorted_vals, 3)), collapse = ", ")
+              message(sprintf("    - %s (character): %d unique values",
+                              col_name, n_unique))
+              message(sprintf("        First 3: %s", first3))
+              message(sprintf("        Last 3: %s", last3))
+            }
+          }
+        }
+        message("")  # Blank line between tables
+
+      }, error = function(e) {
+        message(sprintf("    Error reading table: %s", e$message))
+      })
+    }
+  }
+
   return(table_info)
 }
 

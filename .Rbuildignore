@@ -17,3 +17,5 @@
 ^\.Rproj\.user$
 ^\.github$
 ^format_test$
+^doc$
+^Meta$

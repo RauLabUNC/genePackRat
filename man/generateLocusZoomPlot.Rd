@@ -72,6 +72,39 @@ Invisible \code{TRUE} on success (the plot is written to disk).
 Generates a multi-panel locus plot (Manhattan/scan track, optional signal
 track, and gene track) for a single region in a locusPackRat project.
 }
+\details{
+## Input File Formats
+
+### scan_table (Manhattan plot)
+The scan table CSV must contain:
+\itemize{
+  \item \code{chr}: Chromosome (character, e.g., "3" not 3)
+  \item \code{pos}: Position in base pairs (or use \code{start} or \code{bp})
+  \item \code{p}: P-value (or use \code{lod}, which auto-converts via \code{10^(-lod)})
+}
+
+### signal_table (optional signal track)
+Two formats are supported:
+
+**Founder Effects (8-way crosses like CC/DO mice):**
+\itemize{
+  \item \code{chr}: Chromosome (character)
+  \item \code{start}: Position in base pairs
+  \item \code{A}, \code{B}, \code{C}, \code{D}, \code{E}, \code{F}, \code{G}, \code{H}:
+    Effect values for each founder strain
+}
+
+**Generic Signal:**
+\itemize{
+  \item \code{chr}: Chromosome (character)
+  \item \code{start}: Position in base pairs
+  \item \code{score}: Signal value (or use \code{value}, \code{lod},
+    \code{intensity}, or \code{effect})
+}
+
+For both formats, the \code{end} column is auto-calculated from \code{start}
+positions if not provided.
+}
 \examples{
 \dontrun{
 # Minimal example: Manhattan + genes

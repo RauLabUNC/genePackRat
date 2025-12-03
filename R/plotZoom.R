@@ -36,6 +36,39 @@
 #'   elements in the plot. If \code{NULL}, the default system font is used.
 #' @return Invisible \code{TRUE} on success (the plot is written to disk).
 #'
+#' @details
+#' ## Input File Formats
+#'
+#' ### scan_table (Manhattan plot)
+#' The scan table CSV must contain:
+#' \itemize{
+#'   \item \code{chr}: Chromosome (character, e.g., "3" not 3)
+#'   \item \code{pos}: Position in base pairs (or use \code{start} or \code{bp})
+#'   \item \code{p}: P-value (or use \code{lod}, which auto-converts via \code{10^(-lod)})
+#' }
+#'
+#' ### signal_table (optional signal track)
+#' Two formats are supported:
+#'
+#' **Founder Effects (8-way crosses like CC/DO mice):**
+#' \itemize{
+#'   \item \code{chr}: Chromosome (character)
+#'   \item \code{start}: Position in base pairs
+#'   \item \code{A}, \code{B}, \code{C}, \code{D}, \code{E}, \code{F}, \code{G}, \code{H}:
+#'     Effect values for each founder strain
+#' }
+#'
+#' **Generic Signal:**
+#' \itemize{
+#'   \item \code{chr}: Chromosome (character)
+#'   \item \code{start}: Position in base pairs
+#'   \item \code{score}: Signal value (or use \code{value}, \code{lod},
+#'     \code{intensity}, or \code{effect})
+#' }
+#'
+#' For both formats, the \code{end} column is auto-calculated from \code{start}
+#' positions if not provided.
+#'
 #' @importFrom data.table fread fwrite setDT setnames as.data.table setorderv copy
 #' @importFrom jsonlite read_json
 #' @importFrom grDevices pdf dev.off
@@ -206,6 +239,9 @@ generateLocusZoomPlot <- function(
     }
     
     # 1d. pgParams for the region -----------------------------------------
+    # Ensure target_chr is character (plotgardener handles prefix internally)
+    target_chr <- as.character(target_chr)
+
     pg_params <- plotgardener::pgParams(
         assembly   = assembly,
         chrom      = target_chr,
@@ -222,7 +258,8 @@ generateLocusZoomPlot <- function(
         stop("Scan table not found: ", scan_path)
     
     scan_dt <- data.table::fread(scan_path)
-    
+    scan_dt <- .standardize_chrom(scan_dt)
+
     # Signal table is truly optional
     signal_dt <- NULL
     if (!is.null(signal_table)) {
@@ -232,6 +269,7 @@ generateLocusZoomPlot <- function(
             stop("Signal table not found: ", signal_path)
         }
         signal_dt <- data.table::fread(signal_path)
+        signal_dt <- .standardize_chrom(signal_dt)
     }
     
     # Genes / highlights
@@ -333,6 +371,24 @@ generateLocusZoomPlot <- function(
   res
 }
 
+#' Standardize chromosome column to character
+#' @noRd
+.standardize_chrom <- function(dt) {
+  if (is.null(dt) || nrow(dt) == 0) return(dt)
+
+  # Ensure chr column is character (plotgardener requires this)
+  if ("chr" %in% names(dt)) {
+    dt[, chr := as.character(chr)]
+  }
+
+  # Create chrom column for internal filtering (same value, no prefix needed)
+  if (!"chrom" %in% names(dt) && "chr" %in% names(dt)) {
+    dt[, chrom := chr]
+  }
+
+  return(dt)
+}
+
 #' Internal module to render Genes
 #' @noRd
 .render_genes <- function(gene_list, highlights, params, x, y, w, h) {
@@ -398,11 +454,8 @@ generateLocusZoomPlot <- function(
 ) {
     # Empty?
     if (is.null(scan_data) || nrow(scan_data) == 0) return(y)
-    
-    # Standardize columns
-    if (!"chrom" %in% names(scan_data) && "chr" %in% names(scan_data)) {
-        scan_data[, chrom := as.character(chr)]
-    }
+
+    # Standardize pos column if needed
     if (!"pos" %in% names(scan_data)) {
         if ("start" %in% names(scan_data))      scan_data[, pos := start]
         else if ("bp" %in% names(scan_data))    scan_data[, pos := bp]
@@ -429,7 +482,10 @@ generateLocusZoomPlot <- function(
     
     max_y <- max(c(-log10(scan_data$p), threshold, 5), na.rm = TRUE) + 1
     ylim <- c(0, max_y)
-    
+
+    # Convert to data.frame for plotgardener compatibility
+    scan_data <- as.data.frame(scan_data)
+
     plt <- plotgardener::plotManhattan(
         data    = scan_data,
         params  = params,
@@ -496,12 +552,9 @@ generateLocusZoomPlot <- function(
     font_family = NULL
 ) {
     if (is.null(signal_dt) || nrow(signal_dt) == 0) return(y)
-    
+
     target_chrom <- params$chrom
-    
-    if (!"chrom" %in% colnames(signal_dt) && "chr" %in% colnames(signal_dt)) {
-        signal_dt[, chrom := as.character(chr)]
-    }
+
     if (!"start" %in% colnames(signal_dt)) {
         warning("signal_dt must include 'start' column; skipping signal panel.")
         return(y)
@@ -535,7 +588,9 @@ generateLocusZoomPlot <- function(
         first_plot <- NULL
         for (strain_let in founder_cols) {
             sub_dt <- signal_dt[, .(chrom, start, end, score = get(strain_let))]
-            
+            # Convert to data.frame for plotgardener compatibility
+            sub_dt <- as.data.frame(sub_dt)
+
             plt <- .quiet_pg(
                 plotgardener::plotSignal(
                     data    = sub_dt,
@@ -612,7 +667,10 @@ generateLocusZoomPlot <- function(
         max_val <- max(abs(signal_dt$score), na.rm = TRUE)
         if (!is.finite(max_val) || max_val == 0) return(y)
         sig_range <- c(-max_val * 1.1, max_val * 1.1)
-        
+
+        # Convert to data.frame for plotgardener compatibility
+        signal_dt <- as.data.frame(signal_dt)
+
         plt <- .quiet_pg(
         plotgardener::plotSignal(
             data    = signal_dt,

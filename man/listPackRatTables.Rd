@@ -4,12 +4,15 @@
 \alias{listPackRatTables}
 \title{List Supplementary Tables in locusPackRat Project}
 \usage{
-listPackRatTables(project_dir = ".", full_info = FALSE)
+listPackRatTables(project_dir = ".", full_info = FALSE, criteria_info = FALSE)
 }
 \arguments{
 \item{project_dir}{Character: Path to project directory containing .locusPackRat}
 
 \item{full_info}{Boolean: If true, prints all column names for each supplementary table}
+
+\item{criteria_info}{Boolean: If true, prints detailed column summaries useful for
+building upset plot criteria. Shows data types, ranges (numeric), and sample values (character).}
 }
 \value{
 data.table with table information (name, link_type, link_by, n_rows, n_cols)
@@ -24,6 +27,9 @@ listPackRatTables(project_dir = "my_analysis")
 
 # List with full column information
 listPackRatTables(project_dir = "my_analysis", full_info = TRUE)
+
+# List with criteria-building info (types, ranges, sample values)
+listPackRatTables(project_dir = "my_analysis", criteria_info = TRUE)
 }
 
 }
