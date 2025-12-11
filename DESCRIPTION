@@ -26,9 +26,7 @@ Imports:
     openxlsx (>= 4.2.0),
     dplyr (>= 1.0.0),
     plotgardener,
-    httr,
-    ComplexUpset,
-    ggplot2
+    httr
 Suggests:
     tidyr,
     RColorBrewer,

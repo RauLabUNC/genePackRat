@@ -208,12 +208,12 @@ generateLocusZoomPlot <- function(
     # Set file to save to the 'output' directory of the project_dir
     output_path <- file.path(project_dir, ".locusPackRat", "output", output_file)
     grDevices::pdf(output_path, width = width, height = height)
-    plotgardener::pageCreate(
+    .quiet_pg(plotgardener::pageCreate(
         width = width,
         height = height,
         default.units = "inches",
         showGuides = FALSE
-    )
+    ))
     
     # Margins and gaps as FRACTIONS of the page
     margin_left_frac   <- 0.12
@@ -360,6 +360,7 @@ generateLocusZoomPlot <- function(
     
     grDevices::dev.off()
     message("Plot saved to ", output_file)
+    message("Citation: Kramer NE, Davis ES, Wenger CD, Deoudes EM, Parker SM, Love MI, Phanstiel DH. Plotgardener: cultivating precise multi-panel figures in R. Bioinformatics, 2022.")
     invisible(TRUE)
 }
 
@@ -486,7 +487,7 @@ generateLocusZoomPlot <- function(
     # Convert to data.frame for plotgardener compatibility
     scan_data <- as.data.frame(scan_data)
 
-    plt <- plotgardener::plotManhattan(
+    plt <- .quiet_pg(plotgardener::plotManhattan(
         data    = scan_data,
         params  = params,
         range   = ylim,
@@ -502,14 +503,14 @@ generateLocusZoomPlot <- function(
         sigLine = TRUE,
         baseline = TRUE,
         default.units = "inches"
-    )
+    ))
     
     # Y axis with scaled tick text
     if (requireNamespace("grid", quietly = TRUE)) {
         gp_args <- list(fontsize = text_sizes$axis_tick)
         if (!is.null(font_family)) gp_args$fontfamily <- font_family
-        
-        do.call(
+
+        .quiet_pg(do.call(
             plotgardener::annoYaxis,
             c(
                 list(
@@ -519,18 +520,18 @@ generateLocusZoomPlot <- function(
                 ),
                 gp_args
             )
-        )
+        ))
     } else {
-        plotgardener::annoYaxis(
+        .quiet_pg(plotgardener::annoYaxis(
             plot     = plt,
             at       = pretty(ylim),
             axisLine = TRUE
-        )
+        ))
     }
     
     # Axis label ("LOD"), size-aware and offset as fraction of width
     axis_offset <- w * 0.06
-    plotgardener::plotText(
+    .quiet_pg(plotgardener::plotText(
         label  = "LOD",
         x      = x - axis_offset,
         y      = y + (h / 2),
@@ -539,7 +540,7 @@ generateLocusZoomPlot <- function(
         just   = "center",
         default.units = "inches",
         fontfamily = font_family
-    )
+    ))
     
     y + h
 }
@@ -618,8 +619,8 @@ generateLocusZoomPlot <- function(
             if (requireNamespace("grid", quietly = TRUE)) {
                 gp_args <- list(fontsize = text_sizes$axis_tick)
                 if (!is.null(font_family)) gp_args$fontfamily <- font_family
-                
-                do.call(
+
+                .quiet_pg(do.call(
                     plotgardener::annoYaxis,
                     c(
                         list(
@@ -629,19 +630,19 @@ generateLocusZoomPlot <- function(
                         ),
                         gp_args
                     )
-                )
+                ))
             } else {
-                plotgardener::annoYaxis(
+                .quiet_pg(plotgardener::annoYaxis(
                     plot     = first_plot,
                     at       = c(-max_eff, 0, max_eff),
                     axisLine = TRUE
-                )
+                ))
             }
         }
         
         # Side label
         axis_offset <- w * 0.08
-        plotgardener::plotText(
+        .quiet_pg(plotgardener::plotText(
             label   = "Founder Effects",
             x       = x - axis_offset,
             y       = y + (h / 2),
@@ -650,7 +651,7 @@ generateLocusZoomPlot <- function(
             just    = "center",
             default.units = "inches",
             fontfamily = font_family
-        )
+        ))
         
     } else {
         # Standard single signal
@@ -694,8 +695,8 @@ generateLocusZoomPlot <- function(
         if (requireNamespace("grid", quietly = TRUE)) {
             gp_args <- list(fontsize = text_sizes$axis_tick)
             if (!is.null(font_family)) gp_args$fontfamily <- font_family
-            
-            do.call(
+
+            .quiet_pg(do.call(
                 plotgardener::annoYaxis,
                 c(
                     list(
@@ -705,18 +706,18 @@ generateLocusZoomPlot <- function(
                     ),
                     gp_args
                 )
-            )
+            ))
         } else {
-            plotgardener::annoYaxis(
+            .quiet_pg(plotgardener::annoYaxis(
                 plot     = plt,
                 at       = pretty(sig_range, n = 3),
                 axisLine = TRUE
-            )
+            ))
         }
-        
+
         # Panel label on the side (generic)
         axis_offset <- w * 0.08
-        plotgardener::plotText(
+        .quiet_pg(plotgardener::plotText(
             label   = "Signal",
             x       = x - axis_offset,
             y       = y + (h / 2),
@@ -725,7 +726,7 @@ generateLocusZoomPlot <- function(
             just    = "center",
             default.units = "inches",
             fontfamily = font_family
-        )
+        ))
     }
     
     y + h
@@ -758,7 +759,7 @@ generateLocusZoomPlot <- function(
     params$chrom <- if (grepl("^chr", params$chrom)) params$chrom else paste0("chr", params$chrom)
     
     # Gene track
-    plt <- plotgardener::plotGenes(
+    plt <- .quiet_pg(plotgardener::plotGenes(
         params        = params,
         x             = x,
         y             = y,
@@ -772,7 +773,7 @@ generateLocusZoomPlot <- function(
         default.units = "inches"
         # font_family is not explicitly supported here; fontcolor
         # can be customized separately if you want.
-    )
+    ))
     
     # Genome label underneath, scaled
     .quiet_pg(

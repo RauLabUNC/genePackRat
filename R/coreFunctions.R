@@ -38,7 +38,7 @@
 #'             project_dir = "qtl_analysis")
 #' }
 #'
-#' @importFrom utils head packageVersion
+#' @importFrom utils head packageVersion tail
 #' @importFrom data.table setnames fread fwrite setDT := copy
 #' @importFrom dplyr bind_rows
 #' @importFrom jsonlite write_json read_json
